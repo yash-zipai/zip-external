@@ -23,6 +23,7 @@ from core.config import get_settings
 from core.schema_manager import schema_manager
 from core.categories.healthcare.routes import router as healthcare_router
 from core.categories.crime.routes import router as crime_router
+from core.categories.lifestyle.routes import router as lifestyle_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,8 +50,12 @@ def create_app() -> FastAPI:
 
     # Domain routers — final paths become /v1/healthcare/...
     app.include_router(healthcare_router, prefix="/v1")
+
     # crime
     app.include_router(crime_router, prefix="/v1")
+    
+    #lifestyle
+    app.include_router(lifestyle_router, prefix="/api")
 
     return app
 

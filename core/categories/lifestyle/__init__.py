@@ -1,0 +1,1 @@
+"""Lifestyle category package (DAL, service, schemas, routes)."""
