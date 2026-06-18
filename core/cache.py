@@ -34,12 +34,12 @@ map_pins_cache: TTLCache = TTLCache(maxsize=256, ttl=900)       # 15 min
 crime_summary_cache   = TTLCache(maxsize=1024, ttl=300)   # ← match breakdown_cache's numbers
 crime_breakdown_cache = TTLCache(maxsize=1024, ttl=300)   # ← match breakdown_cache's numbers
 
-<<<<<<< HEAD
+
 #lifestyle
 lifestyle_top_places_cache = TTLCache(maxsize=1024, ttl=300)
 lifestyle_breakdown_cache  = TTLCache(maxsize=1024, ttl=300)
 lifestyle_map_pins_cache   = TTLCache(maxsize=1024, ttl=300)
-=======
+
 #schools
 schools_k12_cache = TTLCache(maxsize=256, ttl=900)
 schools_higher_ed_cache = TTLCache(maxsize=256, ttl=900)
@@ -51,7 +51,7 @@ schools_map_pins_cache = TTLCache(maxsize=256, ttl=900)
 col_breakdown_cache = TTLCache(maxsize=256, ttl=900)
 col_trend_cache = TTLCache(maxsize=256, ttl=900)
 
->>>>>>> 716d6ad4339d5514809e76c39e1bcf16e28307e0
+
 
 
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
