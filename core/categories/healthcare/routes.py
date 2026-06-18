@@ -22,6 +22,7 @@ from .service import HealthcareService, MapPinsService
 router = APIRouter(prefix="/healthcare", tags=["Healthcare"])
 
 
+
 # -- Top Places ----------------------------------------------------------------
 
 

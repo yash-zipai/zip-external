@@ -24,10 +24,15 @@ from cachetools import TTLCache
 # ── Cache instances ───────────────────────────────────────────────────────────
 # Separate caches per endpoint so TTLs and eviction are independent.
 
+#healthcare
 top_places_cache: TTLCache = TTLCache(maxsize=256, ttl=900)     # 15 min
 breakdown_cache: TTLCache = TTLCache(maxsize=256, ttl=900)      # 15 min
 index_scores_cache: TTLCache = TTLCache(maxsize=64, ttl=1800)   # 30 min
 map_pins_cache: TTLCache = TTLCache(maxsize=256, ttl=900)       # 15 min
+
+#crime
+crime_summary_cache   = TTLCache(maxsize=1024, ttl=300)   # ← match breakdown_cache's numbers
+crime_breakdown_cache = TTLCache(maxsize=1024, ttl=300)   # ← match breakdown_cache's numbers
 
 
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
