@@ -25,20 +25,20 @@ from cachetools import TTLCache
 # Separate caches per endpoint so TTLs and eviction are independent.
 
 #healthcare
-top_places_cache: TTLCache = TTLCache(maxsize=256, ttl=900)     # 15 min
-breakdown_cache: TTLCache = TTLCache(maxsize=256, ttl=900)      # 15 min
-index_scores_cache: TTLCache = TTLCache(maxsize=64, ttl=1800)   # 30 min
-map_pins_cache: TTLCache = TTLCache(maxsize=256, ttl=900)       # 15 min
+top_places_cache: TTLCache = TTLCache(maxsize=256, ttl=900)    
+breakdown_cache: TTLCache = TTLCache(maxsize=256, ttl=900)     
+index_scores_cache: TTLCache = TTLCache(maxsize=64, ttl=1800)  
+map_pins_cache: TTLCache = TTLCache(maxsize=256, ttl=900)       
 
 #crime
-crime_summary_cache   = TTLCache(maxsize=1024, ttl=300)   # ← match breakdown_cache's numbers
-crime_breakdown_cache = TTLCache(maxsize=1024, ttl=300)   # ← match breakdown_cache's numbers
+crime_summary_cache   = TTLCache(maxsize=256, ttl=900)  
+crime_breakdown_cache = TTLCache(maxsize=256, ttl=900)   
 
 
 #lifestyle
-lifestyle_top_places_cache = TTLCache(maxsize=1024, ttl=300)
-lifestyle_breakdown_cache  = TTLCache(maxsize=1024, ttl=300)
-lifestyle_map_pins_cache   = TTLCache(maxsize=1024, ttl=300)
+lifestyle_top_places_cache = TTLCache(maxsize=256, ttl=900)
+lifestyle_breakdown_cache  = TTLCache(maxsize=256, ttl=900)
+lifestyle_map_pins_cache   = TTLCache(maxsize=256, ttl=900)
 
 #schools
 schools_k12_cache = TTLCache(maxsize=256, ttl=900)
@@ -51,6 +51,9 @@ schools_map_pins_cache = TTLCache(maxsize=256, ttl=900)
 col_breakdown_cache = TTLCache(maxsize=256, ttl=900)
 col_trend_cache = TTLCache(maxsize=256, ttl=900)
 
+#employer
+jobs_breakdown_cache = TTLCache(maxsize=256, ttl=900)
+jobs_score_cache     = TTLCache(maxsize=256, ttl=900)
 
 
 
