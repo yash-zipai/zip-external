@@ -23,12 +23,12 @@ from core.config import get_settings
 from core.schema_manager import schema_manager
 from core.categories.healthcare.routes import router as healthcare_router
 from core.categories.crime.routes import router as crime_router
-<<<<<<< HEAD
+
 from core.categories.lifestyle.routes import router as lifestyle_router
-=======
+
 from core.categories.schools.routes import router as schools_router
 from core.categories.cost_of_living.routes import router as cost_of_living_router
->>>>>>> 716d6ad4339d5514809e76c39e1bcf16e28307e0
+from core.categories.employer.routes import router as jobs_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,16 +58,19 @@ def create_app() -> FastAPI:
 
     # crime
     app.include_router(crime_router, prefix="/v1")
-<<<<<<< HEAD
-    
+  
     #lifestyle
     app.include_router(lifestyle_router, prefix="/api")
-=======
+
     # schools
     app.include_router(schools_router)
+
     # cost of living
     app.include_router(cost_of_living_router)
->>>>>>> 716d6ad4339d5514809e76c39e1bcf16e28307e0
+
+    #employer
+    app.include_router(jobs_router, prefix="/api")
+
 
     return app
 
