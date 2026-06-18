@@ -1,0 +1,1 @@
+"""Crime category package (DAL, service, schemas, routes)."""
