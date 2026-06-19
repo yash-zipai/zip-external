@@ -1,6 +1,4 @@
-"""
-ZipAI External Data API — application entry point.
-
+"""ZipAI External Data API — application entry point.
 Builds the FastAPI app, wires up domain routers under ``/v1`` and manages
 the per-schema database engine lifecycle.
 
@@ -10,7 +8,6 @@ Run locally::
     # or
     uvicorn main:app --reload
 """
-
 from __future__ import annotations
 
 import argparse
