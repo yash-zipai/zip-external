@@ -1,5 +1,6 @@
 """
 Cost of Living category — API routes.
+<<<<<<< HEAD
 
 Included by main.py WITHOUT a prefix:
 
@@ -14,6 +15,8 @@ endpoints plus the two LEGACY endpoints kept alive for migration:
     LEGACY /api/zipcode/{zip}/housing-market-trends/
 
 Save as: core/categories/cost_of_living/routes.py
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -21,9 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.schema_manager import get_schema_session
 from core.categories.cost_of_living.schemas import (
+<<<<<<< HEAD
     CostOfLivingBreakdownLegacyResponse,
     CostOfLivingBreakdownResponse,
     CostOfLivingIndexScoresResponse,
+=======
+    CostOfLivingBreakdownResponse,
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
     CostOfLivingTrendResponse,
 )
 from .service import CostOfLivingService
@@ -31,6 +38,7 @@ from .service import CostOfLivingService
 router = APIRouter(tags=["Cost of Living"])
 
 
+<<<<<<< HEAD
 # == NEW: Index Scores =========================================================
 
 
@@ -68,6 +76,13 @@ async def get_col_index_scores(
         "income & taxes, monthly cost line items, housing, and per-metric trend "
         "series (mortgage_rate, grocery_cpi, dining_cpi, gas_price)."
     ),
+=======
+@router.get(
+    "/api/zipcode/{zip}/location-indices/col/breakdown/",
+    response_model=CostOfLivingBreakdownResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Cost of living breakdown in a ZIP code",
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 )
 async def get_col_breakdown(
     zip: str,
@@ -77,3 +92,19 @@ async def get_col_breakdown(
     if not result:
         raise HTTPException(status_code=404, detail="Cost of living data not found")
     return result
+<<<<<<< HEAD
+=======
+
+
+@router.get(
+    "/api/zipcode/{zip}/housing-market-trends/",
+    response_model=CostOfLivingTrendResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Housing market trends in a ZIP code",
+)
+async def get_housing_market_trends(
+    zip: str,
+    db: AsyncSession = Depends(get_schema_session("cost_of_living")),
+) -> CostOfLivingTrendResponse:
+    return await CostOfLivingService.get_col_trends(session=db, zipcode=zip)
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)

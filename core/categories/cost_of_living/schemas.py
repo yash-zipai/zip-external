@@ -1,5 +1,6 @@
 """
 ZipAI — Cost of Living Pydantic response schemas.
+<<<<<<< HEAD
 
 Contains BOTH the new-scheme contracts and the legacy ones, so existing
 endpoints keep working during migration:
@@ -11,6 +12,8 @@ endpoints keep working during migration:
     - CostOfLivingTrendResponse           (housing-market-trends)
 
 Save as: core/categories/cost_of_living/schemas.py
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+<<<<<<< HEAD
 # == NEW: Index Scores =========================================================
 
 
@@ -85,6 +89,12 @@ class CostOfLivingBreakdownResponse(BaseModel):
 class CostOfLivingBreakdownLegacyResponse(BaseModel):
     """Legacy flat response for GET /api/zipcode/{zip}/location-indices/col/breakdown/."""
 
+=======
+# ── COL Breakdown ────────────────────────────────────────────────────────────
+
+
+class CostOfLivingBreakdownResponse(BaseModel):
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
     zipcode: str | None = None
     city: str | None = None
     snapshot_date: str | None = None
@@ -106,7 +116,11 @@ class CostOfLivingBreakdownLegacyResponse(BaseModel):
     mortgage_rate_pct: float | None = None
 
 
+<<<<<<< HEAD
 # == LEGACY: housing-market-trends (kept for back-compat) ======================
+=======
+# ── Housing Market Trends ────────────────────────────────────────────────────
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 
 
 class CostOfLivingTrendItem(BaseModel):
@@ -117,4 +131,8 @@ class CostOfLivingTrendItem(BaseModel):
 
 class CostOfLivingTrendResponse(BaseModel):
     zipcode: str
+<<<<<<< HEAD
     trends: list[CostOfLivingTrendItem] = Field(default_factory=list)
+=======
+    trends: list[CostOfLivingTrendItem] = Field(default_factory=list)
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)

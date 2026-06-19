@@ -1,5 +1,6 @@
 """
 ZipAI — Cost of Living Service Layer.
+<<<<<<< HEAD
 
 Holds new-scheme methods (index-scores, nested breakdown) plus the legacy
 methods (flat breakdown, housing-market-trends) for back-compat. Legacy methods
@@ -7,11 +8,16 @@ are intentionally NOT cached, so they don't share a cache key with the new
 methods (the cache decorator keys on args only, not the function name).
 
 Save as: core/categories/cost_of_living/service.py
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 """
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 from collections import OrderedDict
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.cache import (
     cached,
     col_breakdown_cache,
+<<<<<<< HEAD
     col_index_scores_cache,
 )
 from core.categories.cost_of_living.repository import (
@@ -35,13 +42,26 @@ from core.categories.cost_of_living.schemas import (
     CostOfLivingBreakdownLegacyResponse,
     CostOfLivingBreakdownResponse,
     CostOfLivingIndexScoresResponse,
+=======
+    col_trend_cache,
+)
+from core.categories.cost_of_living.repository import (
+    get_col_breakdown as repo_get_col_breakdown,
+    get_col_trends as repo_get_col_trends,
+)
+from core.categories.cost_of_living.schemas import (
+    CostOfLivingBreakdownResponse,
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
     CostOfLivingTrendItem,
     CostOfLivingTrendResponse,
 )
 
+<<<<<<< HEAD
 # Preferred ordering of trend metrics in the new breakdown (others appended).
 _METRIC_ORDER = ["mortgage_rate", "grocery_cpi", "dining_cpi", "gas_price"]
 
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 
 def _to_float(value: Any) -> float | None:
     if value is None:
@@ -59,6 +79,7 @@ def _to_str(value: Any) -> str | None:
 
 
 class CostOfLivingService:
+<<<<<<< HEAD
 
     # ── NEW: index scores ─────────────────────────────────────────────────────
     @staticmethod
@@ -80,6 +101,8 @@ class CostOfLivingService:
         )
 
     # ── NEW: nested breakdown ─────────────────────────────────────────────────
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
     @staticmethod
     @cached(col_breakdown_cache)
     async def get_col_breakdown(
@@ -89,6 +112,7 @@ class CostOfLivingService:
         row = await repo_get_col_breakdown(session, zipcode)
         if not row:
             return None
+<<<<<<< HEAD
 
         income = ColIncome(
             median_annual_income=_to_float(row.get("median_annual_income")),
@@ -148,6 +172,14 @@ class CostOfLivingService:
             city=row.get("city"),
             snapshot_date=_to_str(row.get("snapshot_date")),
             col_index=_to_float(row.get("affordability_score")),
+=======
+        
+        return CostOfLivingBreakdownResponse(
+            zipcode=row.get("zipcode"),
+            city=row.get("city"),
+            snapshot_date=_to_str(row.get("snapshot_date")),
+            col_index=_to_float(row.get("col_index")),
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
             median_annual_income=_to_float(row.get("median_annual_income")),
             median_monthly_income=_to_float(row.get("median_monthly_income")),
             income_tax_rate=_to_float(row.get("income_tax_rate")),
@@ -165,8 +197,13 @@ class CostOfLivingService:
             mortgage_rate_pct=_to_float(row.get("mortgage_rate_pct")),
         )
 
+<<<<<<< HEAD
     # ── LEGACY: housing-market-trends (uncached) ──────────────────────────────
     @staticmethod
+=======
+    @staticmethod
+    @cached(col_trend_cache)
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
     async def get_col_trends(
         session: AsyncSession,
         zipcode: str,
@@ -180,4 +217,8 @@ class CostOfLivingService:
             )
             for row in rows
         ]
+<<<<<<< HEAD
         return CostOfLivingTrendResponse(zipcode=zipcode, trends=trends)
+=======
+        return CostOfLivingTrendResponse(zipcode=zipcode, trends=trends)
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)

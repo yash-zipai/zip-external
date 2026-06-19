@@ -1,10 +1,13 @@
 """
 ZipAI — Cost of Living Data Repository (DAL).
+<<<<<<< HEAD
 
 Executes raw SQL queries against the ``cost_of_living`` schema.
 All queries use parameterised binds — never string interpolation.
 
 Save as: core/categories/cost_of_living/repository.py
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+<<<<<<< HEAD
 async def get_col_index_scores(
     session: AsyncSession,
     zipcode: str,
@@ -52,10 +56,13 @@ async def get_col_index_scores(
     return dict(row._mapping) if row else None
 
 
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 async def get_col_breakdown(
     session: AsyncSession,
     zipcode: str,
 ) -> dict[str, Any] | None:
+<<<<<<< HEAD
     """
     Query 2 — Full cost-of-living detail for the latest snapshot.
 
@@ -63,6 +70,8 @@ async def get_col_breakdown(
     housing. The service nests these into income/monthly_costs/housing objects
     and merges the trend series. Returns None if the ZIP has no snapshot.
     """
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
     sql = text("""
         WITH latest_snapshot AS (
             SELECT *
@@ -75,7 +84,11 @@ async def get_col_breakdown(
             s.zipcode,
             s.city,
             s.snapshot_date,
+<<<<<<< HEAD
             s.affordability_score,
+=======
+            s.affordability_score AS col_index,
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
             i.median_annual_income,
             i.median_monthly_income,
             i.income_tax_rate,
@@ -97,23 +110,36 @@ async def get_col_breakdown(
         LEFT JOIN cost_of_living.col_monthly_costs mc
                ON s.snapshot_id = mc.snapshot_id
         LEFT JOIN cost_of_living.col_housing h
+<<<<<<< HEAD
                ON s.snapshot_id = h.snapshot_id
     """)
     result = await session.execute(sql, {"zip": zipcode})
     row = result.fetchone()
     return dict(row._mapping) if row else None
+=======
+               ON s.snapshot_id = h.snapshot_id;
+    """)
+    result = await session.execute(sql, {"zip": zipcode})
+    row = result.fetchone()
+    if row:
+        return dict(row._mapping)
+    return None
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 
 
 async def get_col_trends(
     session: AsyncSession,
     zipcode: str,
 ) -> list[dict[str, Any]]:
+<<<<<<< HEAD
     """
     Query 3 — Cost-of-living trend points for a ZIP.
 
     One row per (metric, date). Ordered by metric then date so the service can
     group consecutive rows into per-metric series in chronological order.
     """
+=======
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
     sql = text("""
         SELECT
             trend_date,
@@ -121,7 +147,14 @@ async def get_col_trends(
             value
         FROM cost_of_living.col_trend
         WHERE zipcode = :zip
+<<<<<<< HEAD
         ORDER BY metric, trend_date
     """)
     result = await session.execute(sql, {"zip": zipcode})
     return [dict(row._mapping) for row in result.fetchall()]
+=======
+        ORDER BY metric, trend_date;
+    """)
+    result = await session.execute(sql, {"zip": zipcode})
+    return [dict(row._mapping) for row in result.fetchall()]
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)

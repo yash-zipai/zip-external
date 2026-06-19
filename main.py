@@ -23,6 +23,8 @@ from core.config import get_settings
 from core.schema_manager import schema_manager
 from core.categories.healthcare.routes import router as healthcare_router
 from core.categories.crime.routes import router as crime_router
+from core.categories.schools.routes import router as schools_router
+from core.categories.cost_of_living.routes import router as cost_of_living_router
 
 from core.categories.lifestyle.routes import router as lifestyle_router
 
@@ -58,6 +60,7 @@ def create_app() -> FastAPI:
 
     # crime
     app.include_router(crime_router, prefix="/v1")
+<<<<<<< HEAD
   
     #lifestyle
     app.include_router(lifestyle_router, prefix="/api")
@@ -71,6 +74,12 @@ def create_app() -> FastAPI:
     #employer
     app.include_router(jobs_router, prefix="/api")
 
+=======
+    # schools
+    app.include_router(schools_router)
+    # cost of living
+    app.include_router(cost_of_living_router)
+>>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 
     return app
 
