@@ -31,14 +31,16 @@ index_scores_cache: TTLCache = TTLCache(maxsize=64, ttl=1800)
 map_pins_cache: TTLCache = TTLCache(maxsize=256, ttl=900)       
 
 #crime
-crime_summary_cache   = TTLCache(maxsize=256, ttl=900)  
-crime_breakdown_cache = TTLCache(maxsize=256, ttl=900)   
-
+crime_summary_cache      = TTLCache(maxsize=256, ttl=900)
+crime_breakdown_cache    = TTLCache(maxsize=256, ttl=900)
+crime_index_scores_cache = TTLCache(maxsize=256, ttl=900)
+crime_insights_cache     = TTLCache(maxsize=256, ttl=900)
 
 #lifestyle
-lifestyle_top_places_cache = TTLCache(maxsize=256, ttl=900)
-lifestyle_breakdown_cache  = TTLCache(maxsize=256, ttl=900)
-lifestyle_map_pins_cache   = TTLCache(maxsize=256, ttl=900)
+lifestyle_top_places_cache   = TTLCache(maxsize=256, ttl=900)
+lifestyle_breakdown_cache    = TTLCache(maxsize=256, ttl=900)
+lifestyle_index_scores_cache = TTLCache(maxsize=256, ttl=900)
+lifestyle_map_pins_cache     = TTLCache(maxsize=256, ttl=900)
 
 #schools
 schools_k12_cache = TTLCache(maxsize=256, ttl=900)
@@ -48,8 +50,9 @@ schools_details_cache = TTLCache(maxsize=1024, ttl=900)
 schools_map_pins_cache = TTLCache(maxsize=256, ttl=900)
 
 #cost_of_living
-col_breakdown_cache = TTLCache(maxsize=256, ttl=900)
-col_trend_cache = TTLCache(maxsize=256, ttl=900)
+col_breakdown_cache     = TTLCache(maxsize=256, ttl=900)
+col_trend_cache         = TTLCache(maxsize=256, ttl=900)
+col_index_scores_cache  = TTLCache(maxsize=256, ttl=900)
 
 #employer
 jobs_breakdown_cache = TTLCache(maxsize=256, ttl=900)

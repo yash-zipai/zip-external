@@ -1,18 +1,19 @@
 """
 Lifestyle category — API routes.
 
-An APIRouter holding the lifestyle endpoints. The three paths you provided
+An APIRouter holding the lifestyle endpoints. The paths you provided
 don't share a common prefix, so this router sets no prefix and each route
 carries its full sub-path. Include it so the final paths match your scheme,
 e.g. to reproduce the exact /api/... paths you wrote:
 
     app.include_router(lifestyle_router, prefix="/api")
     # -> /api/zipcode/{zip}/top-places/
+    # -> /api/zipcode/{zip}/location-indices/            (index scores)
     # -> /api/zipcode/{zip}/location-indices/lifestyle/breakdown/
-    # -> /api/map/v1/places/pins/
+    # -> /api/map/v1/lifestyle/places/pins/
 
 If you'd rather keep lifestyle under /v1 like healthcare and crime, include
-with prefix="/v1" instead (the pins path then becomes /v1/map/v1/places/pins/).
+with prefix="/v1" instead (the pins path then becomes /v1/map/v1/lifestyle/places/pins/).
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.schema_manager import get_schema_session
 from core.pagination import PaginationParams, pagination_params
 from core.categories.lifestyle.schemas import (
+    IndexScoresResponse,
     LifestyleBreakdownResponse,
     MapPinsResponse,
     TopPlacesResponse,
@@ -60,6 +62,28 @@ async def get_top_places(
         limit=page.limit,
         offset=page.offset,
     )
+
+
+# -- Index Scores --------------------------------------------------------------
+
+
+@router.get(
+    "/zipcode/{zip}/location-indices/",
+    response_model=IndexScoresResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Lifestyle index scores by zipcode",
+    description=(
+        "Returns the ZIP-level lifestyle aggregate: total places, overall "
+        "average rating, total reviews and the 0–100 lifestyle index score. "
+        "No place list, thumbnails or images."
+    ),
+)
+async def get_index_scores(
+    zip: str,
+    db: AsyncSession = Depends(get_schema_session("lifestyle")),
+) -> IndexScoresResponse:
+    # NEW scheme equivalent: GET /v1/lifestyle/zipcode/{zip}/index-scores
+    return await LifestyleService.get_index_scores(session=db, zipcode=zip)
 
 
 # -- Breakdown -----------------------------------------------------------------
@@ -107,7 +131,7 @@ def _parse_bbox(raw: str | None) -> tuple[float, float, float, float] | None:
 
 
 @router.get(
-    "/map/v1/places/pins/",
+    "/map/v1/lifestyle/places/pins/",
     response_model=MapPinsResponse,
     status_code=status.HTTP_200_OK,
     summary="Lifestyle place map pins",

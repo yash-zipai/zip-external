@@ -4,12 +4,13 @@ ZipAI — Lifestyle Pydantic response schemas.
 Defines the API contract for the lifestyle endpoints:
   - Top places (places by zipcode, optional category filter)
   - Breakdown (per-category averages for a zipcode)
+  - Index scores (ZIP-level aggregate + 0–100 lifestyle index score)
   - Map pins (minimal place pins for maps)
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from core.pagination import PaginationMeta
 
@@ -27,12 +28,26 @@ class PlaceDetail(BaseModel):
     phone: str | None = Field(None, description="Contact phone number.")
     website: str | None = Field(None, description="Website URL.")
     google_maps: str | None = Field(None, description="Google Maps listing URL.")
+    hours: str | None = Field(None, description="Opening hours (one line per day).")
     rank: int | None = Field(None, description="Rank within category for this zipcode.")
     avg_rating: float | None = Field(None, description="Average review rating (1.00–5.00).")
     review_count: int = Field(0, description="Total number of scraped reviews.")
     latitude: float | None = Field(None, description="Latitude.")
     longitude: float | None = Field(None, description="Longitude.")
     thumbnail_url: str | None = Field(None, description="First image URL (thumbnail).")
+
+    @field_validator("hours", mode="before")
+    @classmethod
+    def _normalize_hours(cls, v: object) -> str | None:
+        """Google Places returns hours as a list of per-day strings
+        (weekday_text / weekdayDescriptions). Join it into a single string;
+        pass through bare strings and None unchanged."""
+        if v is None:
+            return None
+        if isinstance(v, (list, tuple)):
+            parts = [str(part) for part in v if part is not None]
+            return "\n".join(parts) if parts else None
+        return str(v)
 
 
 class TopPlacesResponse(BaseModel):
@@ -72,6 +87,24 @@ class LifestyleBreakdownResponse(BaseModel):
     )
 
 
+# ── Index Scores ──────────────────────────────────────────────────────────────
+
+
+class IndexScoresResponse(BaseModel):
+    """Response for GET /api/zipcode/{zip}/location-indices/ (ZIP aggregate)."""
+
+    zipcode: str = Field(..., description="Queried zipcode.")
+    city: str | None = Field(None, description="City name for the zipcode.")
+    total_places: int = Field(0, description="Total lifestyle places in the zipcode.")
+    overall_avg_rating: float | None = Field(
+        None, description="Average rating across all lifestyle places in the zipcode."
+    )
+    total_reviews: int = Field(0, description="Total reviews across all places.")
+    lifestyle_index_score: int | None = Field(
+        None, description="Composite lifestyle index score (0–100)."
+    )
+
+
 # ── Map Pins ──────────────────────────────────────────────────────────────────
 
 
@@ -83,6 +116,8 @@ class MapPin(BaseModel):
     category: str | None = Field(None, description="Place category (for layer styling).")
     latitude: float = Field(..., description="Latitude (always present).")
     longitude: float = Field(..., description="Longitude (always present).")
+    avg_rating: float | None = Field(None, description="Average stored rating.")
+    thumbnail_url: str | None = Field(None, description="First image URL (thumbnail).")
 
 
 class MapPinsResponse(BaseModel):
