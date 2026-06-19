@@ -60,7 +60,6 @@ def create_app() -> FastAPI:
 
     # crime
     app.include_router(crime_router, prefix="/v1")
-<<<<<<< HEAD
   
     #lifestyle
     app.include_router(lifestyle_router, prefix="/api")
@@ -74,12 +73,6 @@ def create_app() -> FastAPI:
     #employer
     app.include_router(jobs_router, prefix="/api")
 
-=======
-    # schools
-    app.include_router(schools_router)
-    # cost of living
-    app.include_router(cost_of_living_router)
->>>>>>> 693e6ee (feat: implement TTL caching module and developed api's schools and cost of living categories)
 
     return app
 
