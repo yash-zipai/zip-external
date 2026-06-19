@@ -4,30 +4,38 @@ ZipAI — Crime Service Layer.
 Orchestrates repository calls, applies caching, and maps raw dicts
 to typed Pydantic response models. All business logic for crime
 endpoints lives here.
+
+Save as: core/categories/crime/service.py
 """
 
 from __future__ import annotations
 
 import time
+from datetime import date
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # from logging import get_logger
 from core.categories.crime.schemas import (
-    CrimeBreakdownItem,
     CrimeBreakdownResponse,
-    CrimeSummaryResponse,
-    CrimeSummaryYear,
+    CrimeIndexScoresResponse,
+    CrimeInsightsResponse,
+    CrimeMonthPoint,
+    CrimeRateSeries,
+    CrimeTopOffense,
+    CrimeTrend,
 )
 from core.cache import (
     cached,
     crime_breakdown_cache,
-    crime_summary_cache,
+    crime_index_scores_cache,
+    crime_insights_cache,
 )
 from core.categories.crime.repository import (
-    get_crime_breakdown as repo_get_crime_breakdown,
-    get_crime_summary as repo_get_crime_summary,
+    get_breakdown as repo_get_breakdown,
+    get_index_scores as repo_get_index_scores,
+    get_insights as repo_get_insights,
 )
 
 # logger = get_logger(__name__)
@@ -60,74 +68,127 @@ class CrimeService:
     """Business logic for crime API endpoints."""
 
     @staticmethod
-    @cached(crime_summary_cache)
-    async def get_crime_summary(
+    @cached(crime_index_scores_cache)
+    async def get_index_scores(
         session: AsyncSession,
         zipcode: str,
-    ) -> CrimeSummaryResponse:
-        """Retrieve the per-year crime summary for a zipcode."""
+    ) -> CrimeIndexScoresResponse:
+        """Retrieve the ZIP-level crime index card."""
         t0 = time.monotonic()
 
-        rows = await repo_get_crime_summary(session, zipcode)
+        row = await repo_get_index_scores(session, zipcode)
 
-        years = [
-            CrimeSummaryYear(
-                year=_to_int(row.get("year")),
-                city=row.get("city"),
-                total_crimes=_to_int(row.get("total_crimes")),
-                crime_rate_index=_to_float(row.get("crime_rate_index")),
-                violent_count=_to_int(row.get("violent_count")),
-                violent_rate=_to_float(row.get("violent_rate")),
-                property_count=_to_int(row.get("property_count")),
-                property_rate=_to_float(row.get("property_rate")),
+        if row is None:
+            # No current crime history for this ZIP — return a zeroed aggregate.
+            return CrimeIndexScoresResponse(
+                zipcode=zipcode,
+                city=None,
+                crime_index=None,
+                level=None,
+                violent_total=0,
+                property_total=0,
+                safety_pct=None,
+                as_of=None,
             )
-            for row in rows
-        ]
 
         duration_ms = int((time.monotonic() - t0) * 1000)
-        # logger.info(
-        #     "svc_get_crime_summary",
-        #     zipcode=zipcode,
-        #     years_returned=len(years),
-        #     duration_ms=duration_ms,
-        # )
+        # logger.info("svc_get_index_scores", zipcode=zipcode, duration_ms=duration_ms)
 
-        return CrimeSummaryResponse(zipcode=zipcode, years=years)
+        return CrimeIndexScoresResponse(
+            zipcode=zipcode,
+            city=row.get("city"),
+            crime_index=_to_float(row.get("crime_index")),
+            level=row.get("level"),
+            violent_total=_to_int(row.get("violent_total")),
+            property_total=_to_int(row.get("property_total")),
+            safety_pct=_to_float(row.get("safety_pct")),
+            as_of=row.get("as_of"),
+        )
 
     @staticmethod
     @cached(crime_breakdown_cache)
-    async def get_crime_breakdown(
+    async def get_breakdown(
         session: AsyncSession,
         zipcode: str,
     ) -> CrimeBreakdownResponse:
-        """Retrieve the crime breakdown for a zipcode's most recent year."""
+        """Retrieve the crime breakdown pop-up (summary + top offenses + trend)."""
         t0 = time.monotonic()
 
-        rows = await repo_get_crime_breakdown(session, zipcode)
+        data = await repo_get_breakdown(session, zipcode)
 
-        items = [
-            CrimeBreakdownItem(
-                crime_type=row["crime_type"],
-                crime_class=row.get("crime_class"),
-                actual_count=_to_int(row.get("actual_count")),
-                rate=_to_float(row.get("rate")),
+        if data is None:
+            return CrimeBreakdownResponse(
+                zipcode=zipcode,
+                crime_index=None,
+                violent_total=0,
+                property_total=0,
+                top_offenses=[],
+                trend=None,
             )
-            for row in rows
+
+        top_offenses = [
+            CrimeTopOffense(
+                crime_type=o.get("crime_type"),
+                total_count=_to_int(o.get("total_count")),
+                crime_rank=o.get("crime_rank"),
+                avg_rate=_to_float(o.get("avg_rate")),
+            )
+            for o in data.get("top_offenses", [])
         ]
 
-        # Every row shares the same (max) year; surface it at the top level.
-        year: int | None = None
-        if rows:
-            raw_year = rows[0].get("year")
-            year = int(raw_year) if raw_year is not None else None
+        t = data.get("trend")
+        trend = (
+            CrimeTrend(
+                latest_year=t.get("latest_year"),
+                latest_total=_to_int(t.get("latest_total")),
+                prev_year=t.get("prev_year"),
+                prev_total=_to_int(t.get("prev_total")),
+                yoy_pct=_to_float(t.get("yoy_pct")),
+                trend_direction=t.get("trend_direction"),
+            )
+            if t
+            else None
+        )
 
         duration_ms = int((time.monotonic() - t0) * 1000)
-        # logger.info(
-        #     "svc_get_crime_breakdown",
-        #     zipcode=zipcode,
-        #     year=year,
-        #     items_returned=len(items),
-        #     duration_ms=duration_ms,
-        # )
+        # logger.info("svc_get_breakdown", zipcode=zipcode, duration_ms=duration_ms)
 
-        return CrimeBreakdownResponse(zipcode=zipcode, year=year, items=items)
+        return CrimeBreakdownResponse(
+            zipcode=zipcode,
+            crime_index=_to_float(data.get("crime_index")),
+            violent_total=_to_int(data.get("violent_total")),
+            property_total=_to_int(data.get("property_total")),
+            top_offenses=top_offenses,
+            trend=trend,
+        )
+
+    @staticmethod
+    @cached(crime_insights_cache)
+    async def get_insights(
+        session: AsyncSession,
+        zipcode: str,
+        months: int = 23,
+    ) -> CrimeInsightsResponse:
+        """Retrieve the monthly crime-rate series for the listing chart."""
+        t0 = time.monotonic()
+
+        rows = await repo_get_insights(session, zipcode, months=months)
+
+        series = [
+            CrimeMonthPoint(month=r.get("month"), value=_to_int(r.get("value")))
+            for r in rows
+        ]
+
+        # as_of: data freshness date. Defaulting to today; swap for a real
+        # freshness column from your monthly source if you have one.
+        as_of = date.today()
+
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        # logger.info("svc_get_insights", zipcode=zipcode, points=len(series),
+        #             duration_ms=duration_ms)
+
+        return CrimeInsightsResponse(
+            zipcode=zipcode,
+            crime_rate=CrimeRateSeries(monthly_series=series, as_of=as_of),
+            mock=False,
+        )

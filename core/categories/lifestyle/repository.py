@@ -4,7 +4,9 @@ ZipAI — Lifestyle Data Repository (DAL).
 Executes raw SQL queries against the ``lifestyle`` schema.
 All queries use parameterised binds — never string interpolation.
 
-The SQL mirrors the original queries provided by the lifestyle data team,
+The SQL mirrors the queries provided by the lifestyle data team, updated so
+that ratings/review counts are read from the stored ``lifestyle_place`` columns
+(``rating`` / ``reviews_count``) rather than aggregated from the review table,
 with pagination added to the list endpoints.
 """
 
@@ -31,7 +33,8 @@ async def get_top_places(
     Query 1 — Top lifestyle places in a zipcode.
 
     Optionally filtered by a single category. ``avg_rating`` / ``review_count``
-    are aggregated from the review table; ``thumbnail_url`` is the first image.
+    come from the stored ``lifestyle_place`` columns; ``thumbnail_url`` is the
+    first (lowest) image URL for the place.
 
     Returns:
         (rows, total_count)  where rows is a list of dicts.
@@ -65,20 +68,21 @@ async def get_top_places(
             lp.phone,
             lp.website,
             lp.google_maps,
+            lp.hours,
             lp.rank,
-            ROUND(AVG(lr.rating), 2)   AS avg_rating,
-            COUNT(lr.review_id)        AS review_count,
+            lp.rating          AS avg_rating,
+            lp.reviews_count   AS review_count,
             lp.latitude,
             lp.longitude,
-            MIN(li.image_url)          AS thumbnail_url
+            MIN(li.image_url)  AS thumbnail_url
         FROM lifestyle.lifestyle_place lp
-        LEFT JOIN lifestyle.lifestyle_review lr  ON lr.place_id = lp.place_id
-        LEFT JOIN lifestyle.lifestyle_image  li  ON li.place_id = lp.place_id
+        LEFT JOIN lifestyle.lifestyle_image li  ON li.place_id = lp.place_id
         WHERE lp.zipcode = :zip
           {category_clause}
         GROUP BY
             lp.place_id, lp.place_name, lp.category,
-            lp.address, lp.phone, lp.website, lp.google_maps, lp.rank,
+            lp.address, lp.phone, lp.website, lp.google_maps, lp.hours,
+            lp.rank, lp.rating, lp.reviews_count,
             lp.latitude, lp.longitude
         ORDER BY lp.category, lp.rank ASC
         LIMIT :limit OFFSET :offset
@@ -103,15 +107,19 @@ async def get_breakdown(
 
     Returns one row per category with the average stored rating, the number
     of places, and the total review count, ordered by average rating desc.
+
+    Column aliases (``category`` / ``total_places`` / ``city``) are kept to match
+    what ``LifestyleService.get_breakdown`` consumes. ``total_reviews`` is
+    COALESCEd to 0 so a category with no reviews returns 0 rather than NULL.
     """
     sql = text("""
         SELECT
             zipcode,
             city,
             category,
-            ROUND(AVG(rating)::numeric, 2)   AS avg_rating,
-            COUNT(place_id)                  AS total_places,
-            SUM(reviews_count)               AS total_reviews
+            ROUND(AVG(rating)::numeric, 2)        AS avg_rating,
+            COUNT(place_id)                       AS total_places,
+            COALESCE(SUM(reviews_count), 0)       AS total_reviews
         FROM lifestyle.lifestyle_place
         WHERE zipcode = :zip
         GROUP BY zipcode, city, category
@@ -125,6 +133,47 @@ async def get_breakdown(
     return rows
 
 
+async def get_index_scores(
+    session: AsyncSession,
+    zipcode: str,
+) -> dict[str, Any] | None:
+    """
+    Query 3 — Lifestyle index scores (ZIP aggregate) for a zipcode.
+
+    Returns a single aggregate row for the ZIP, or None if the ZIP has no
+    lifestyle places. ``lifestyle_index_score`` (0–100) is a derived metric:
+        70% weight on average rating (normalised against 5.0)
+      + 30% weight on place density (capped at 50 places).
+    Adjust the weighting/formula here if the product spec changes.
+    """
+    sql = text("""
+        SELECT
+            lp.zipcode,
+            MAX(lp.city)                          AS city,
+            COUNT(*)                              AS total_places,
+            ROUND(AVG(lp.rating)::numeric, 2)     AS overall_avg_rating,
+            COALESCE(SUM(lp.reviews_count), 0)    AS total_reviews,
+            LEAST(
+                ROUND(
+                    ((AVG(lp.rating) / 5.0) * 70)
+                    + (LEAST(COUNT(*), 50) / 50.0 * 30)
+                , 0),
+                100
+            )                                     AS lifestyle_index_score
+        FROM lifestyle.lifestyle_place lp
+        WHERE lp.zipcode = :zip
+        GROUP BY lp.zipcode
+    """)
+
+    result = await session.execute(sql, {"zip": zipcode})
+    row = result.fetchone()
+    if row is None:
+        return None
+
+    # logger.debug("repo_get_index_scores", zipcode=zipcode)
+    return dict(row._mapping)
+
+
 async def get_map_pins(
     session: AsyncSession,
     zipcode: str | None = None,
@@ -134,12 +183,13 @@ async def get_map_pins(
     offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
     """
-    Query 3 — Lifestyle place map pins.
+    Query 4 — Lifestyle place map pins.
 
     Returns minimal place locations for map display, optionally filtered by
     zipcode, layer (category) and/or a map bounding box. Only places with BOTH
     latitude and longitude are returned — a pin without coordinates can't be
-    placed on a map.
+    placed on a map. ``avg_rating`` (stored) and ``thumbnail_url`` (first image)
+    are included for pin previews.
     """
     # A pin must have coordinates, so these conditions are always applied.
     conditions: list[str] = ["lp.latitude IS NOT NULL", "lp.longitude IS NOT NULL"]
@@ -160,7 +210,8 @@ async def get_map_pins(
                 params[f"layer_{i}"] = layer
 
     if bbox:
-        # bbox = (west, south, east, north) → longitude/latitude ranges
+        # bbox = (west, south, east, north) → longitude/latitude ranges.
+        # Wrapped so the OR-free AND chain can't be broken by precedence.
         west, south, east, north = bbox
         conditions.append("lp.longitude BETWEEN :west AND :east")
         conditions.append("lp.latitude  BETWEEN :south AND :north")
@@ -180,9 +231,15 @@ async def get_map_pins(
             lp.place_name,
             lp.category,
             lp.latitude,
-            lp.longitude
+            lp.longitude,
+            lp.rating          AS avg_rating,
+            MIN(li.image_url)  AS thumbnail_url
         FROM lifestyle.lifestyle_place lp
+        LEFT JOIN lifestyle.lifestyle_image li  ON li.place_id = lp.place_id
         {where_clause}
+        GROUP BY
+            lp.place_id, lp.place_name, lp.category,
+            lp.latitude, lp.longitude, lp.rating, lp.reviews_count
         ORDER BY lp.rating DESC NULLS LAST, lp.reviews_count DESC NULLS LAST
         LIMIT :limit OFFSET :offset
     """)

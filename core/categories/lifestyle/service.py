@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # from logging import get_logger
 from core.categories.lifestyle.schemas import (
+    IndexScoresResponse,
     LifestyleBreakdownItem,
     LifestyleBreakdownResponse,
     MapPin,
@@ -26,11 +27,13 @@ from core.pagination import PaginationMeta
 from core.cache import (
     cached,
     lifestyle_breakdown_cache,
+    lifestyle_index_scores_cache,
     lifestyle_map_pins_cache,
     lifestyle_top_places_cache,
 )
 from core.categories.lifestyle.repository import (
     get_breakdown as repo_get_breakdown,
+    get_index_scores as repo_get_index_scores,
     get_map_pins as repo_get_map_pins,
     get_top_places as repo_get_top_places,
 )
@@ -89,6 +92,7 @@ class LifestyleService:
                 phone=row.get("phone"),
                 website=row.get("website"),
                 google_maps=row.get("google_maps"),
+                hours=row.get("hours"),
                 rank=row.get("rank"),
                 avg_rating=_to_float(row.get("avg_rating")),
                 review_count=_to_int(row.get("review_count")),
@@ -143,6 +147,41 @@ class LifestyleService:
         return LifestyleBreakdownResponse(zipcode=zipcode, city=city, items=items)
 
     @staticmethod
+    @cached(lifestyle_index_scores_cache)
+    async def get_index_scores(
+        session: AsyncSession,
+        zipcode: str,
+    ) -> IndexScoresResponse:
+        """Retrieve the ZIP-level lifestyle aggregate and index score."""
+        t0 = time.monotonic()
+
+        row = await repo_get_index_scores(session, zipcode)
+
+        if row is None:
+            # No lifestyle places for this ZIP — return a zeroed aggregate
+            # rather than a 404, consistent with the list endpoints.
+            return IndexScoresResponse(
+                zipcode=zipcode,
+                city=None,
+                total_places=0,
+                overall_avg_rating=None,
+                total_reviews=0,
+                lifestyle_index_score=None,
+            )
+
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        # logger.info("svc_get_index_scores", zipcode=zipcode, duration_ms=duration_ms)
+
+        return IndexScoresResponse(
+            zipcode=zipcode,
+            city=row.get("city"),
+            total_places=_to_int(row.get("total_places")),
+            overall_avg_rating=_to_float(row.get("overall_avg_rating")),
+            total_reviews=_to_int(row.get("total_reviews")),
+            lifestyle_index_score=_to_int(row.get("lifestyle_index_score")),
+        )
+
+    @staticmethod
     @cached(lifestyle_map_pins_cache)
     async def get_map_pins(
         session: AsyncSession,
@@ -178,6 +217,8 @@ class LifestyleService:
                     category=row.get("category"),
                     latitude=lat,
                     longitude=lng,
+                    avg_rating=_to_float(row.get("avg_rating")),
+                    thumbnail_url=row.get("thumbnail_url"),
                 )
             )
 

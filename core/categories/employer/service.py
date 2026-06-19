@@ -16,8 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # from logging import get_logger
 from core.categories.employer.schemas import (
     JobsBreakdownResponse,
+    JobsIndexScoreResponse,
     JobsIndustryItem,
-    JobsScoreResponse,
 )
 from core.cache import (
     cached,
@@ -26,7 +26,7 @@ from core.cache import (
 )
 from core.categories.employer.repository import (
     get_breakdown as repo_get_breakdown,
-    get_score as repo_get_score,
+    get_index_score as repo_get_index_score,
 )
 
 # logger = get_logger(__name__)
@@ -74,7 +74,7 @@ class JobsService:
         session: AsyncSession,
         zipcode: str,
     ) -> JobsBreakdownResponse:
-        """Retrieve the per-industry employer breakdown for a zipcode."""
+        """Retrieve the top-5 per-industry employer breakdown for a zipcode."""
         t0 = time.monotonic()
 
         rows = await repo_get_breakdown(session, zipcode)
@@ -82,24 +82,20 @@ class JobsService:
         items = [
             JobsIndustryItem(
                 rank=_to_int_opt(row.get("rank")),
+                sector=row.get("sector_name"),
                 naics_code=row.get("naics_code"),
-                sector_name=row.get("sector_name"),
                 establishments_zip=_to_int_opt(row.get("establishments_zip")),
                 share_pct=_to_float(row.get("share_pct")),
-                employment_zip_suppressed=_to_int_opt(row.get("employment_zip_suppressed")),
-                payroll_k_zip_suppressed=_to_int_opt(row.get("payroll_k_zip_suppressed")),
                 employment_county=_to_int_opt(row.get("employment_county")),
-                payroll_k_county=_to_int_opt(row.get("payroll_k_county")),
+                annual_payroll_k_county=_to_int_opt(row.get("payroll_k_county")),
                 establishments_county=_to_int_opt(row.get("establishments_county")),
             )
             for row in rows
         ]
 
-        # zipcode/city/lat/lng come from the snapshot — constant across rows.
+        # zipcode/city/county_fips/snapshot_year come from the snapshot —
+        # constant across rows.
         first = rows[0] if rows else {}
-        city = first.get("city")
-        latitude = _to_float(first.get("latitude"))
-        longitude = _to_float(first.get("longitude"))
 
         duration_ms = int((time.monotonic() - t0) * 1000)
         # logger.info("svc_get_breakdown", zipcode=zipcode,
@@ -107,35 +103,36 @@ class JobsService:
 
         return JobsBreakdownResponse(
             zipcode=zipcode,
-            city=city,
-            latitude=latitude,
-            longitude=longitude,
-            items=items,
+            city=first.get("city"),
+            county_fips=first.get("county_fips"),
+            snapshot_year=_to_int_opt(first.get("zip_snapshot_year")),
+            top_5_industries=items,
         )
 
     @staticmethod
     @cached(jobs_score_cache)
-    async def get_score(
+    async def get_index_score(
         session: AsyncSession,
         zipcode: str,
-    ) -> JobsScoreResponse:
-        """Retrieve the aggregated job-market score for a zipcode."""
+    ) -> JobsIndexScoreResponse:
+        """Retrieve the aggregated jobs index score for a zipcode."""
         t0 = time.monotonic()
 
-        row = await repo_get_score(session, zipcode)
+        row = await repo_get_index_score(session, zipcode)
 
         duration_ms = int((time.monotonic() - t0) * 1000)
-        # logger.info("svc_get_score", zipcode=zipcode,
+        # logger.info("svc_get_index_score", zipcode=zipcode,
         #             found=row is not None, duration_ms=duration_ms)
 
         if row is None:
             # No snapshot for this zip — return an empty/zeroed summary.
-            return JobsScoreResponse(zipcode=zipcode, city=None)
+            return JobsIndexScoreResponse(zipcode=zipcode, city=None)
 
-        return JobsScoreResponse(
+        return JobsIndexScoreResponse(
             zipcode=zipcode,
             city=row.get("city"),
-            job_market_score=_to_float(row.get("job_market_score")),
-            sector_count=_to_int(row.get("sector_count")),
-            total_establishments=_to_int(row.get("total_establishments")),
+            jobs_index_score=_to_int_opt(row.get("jobs_index_score")),
+            top_sector=row.get("top_sector"),
+            establishment_count=_to_int(row.get("establishment_count")),
+            snapshot_year=_to_int_opt(row.get("zip_snapshot_year")),
         )
