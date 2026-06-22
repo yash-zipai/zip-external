@@ -33,9 +33,7 @@ from core.categories.employer.routes import router as jobs_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — dispose every per-schema engine on shutdown."""
-    # Startup: engines are created lazily on first request, nothing to do here.
     yield
-    # Shutdown: cleanly close all connection pools.
     await schema_manager.dispose_all()
 
 
@@ -66,10 +64,10 @@ def create_app() -> FastAPI:
     app.include_router(schools_router,prefix="/v1")
 
     # cost of living
-    app.include_router(cost_of_living_router)
+    app.include_router(cost_of_living_router,prefix="/v1")
 
     #employer
-    app.include_router(jobs_router, prefix="/api")
+    app.include_router(jobs_router, prefix="/v1")
 
 
     return app
