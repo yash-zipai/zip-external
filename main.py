@@ -60,7 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(crime_router, prefix="/v1")
   
     #lifestyle
-    app.include_router(lifestyle_router, prefix="/api")
+    app.include_router(lifestyle_router, prefix="/v1")
 
     # schools
     app.include_router(schools_router)
