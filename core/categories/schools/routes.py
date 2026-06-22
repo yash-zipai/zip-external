@@ -19,7 +19,7 @@ router = APIRouter(tags=["Schools"])
 
 
 @router.get(
-    "/api/zipcode/{zip}/schools/",
+    "/v1/zipcode/{zip}/schools/",
     response_model=SchoolK12Response,
     status_code=status.HTTP_200_OK,
     summary="K-12 schools in a ZIP code",
@@ -32,7 +32,7 @@ async def get_schools_k12(
 
 
 @router.get(
-    "/api/zipcode/{zip}/colleges-universities/",
+    "/v1/zipcode/{zip}/colleges-universities/",
     response_model=SchoolHigherEdResponse,
     status_code=status.HTTP_200_OK,
     summary="Higher ed (colleges and universities) in a ZIP code",
