@@ -58,6 +58,8 @@ col_index_scores_cache  = TTLCache(maxsize=256, ttl=900)
 jobs_breakdown_cache = TTLCache(maxsize=256, ttl=900)
 jobs_score_cache     = TTLCache(maxsize=256, ttl=900)
 
+#audit
+audit_logs_cache = TTLCache(maxsize=256, ttl=900)
 
 
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
