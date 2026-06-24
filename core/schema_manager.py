@@ -61,8 +61,8 @@ class SchemaSessionManager:
                     engine = create_async_engine(
                         self._settings.database_url,
                         echo=self._settings.db_echo,
-                        pool_size=5,
-                        max_overflow=10,
+                        pool_size=3,
+                        max_overflow=2,
                         pool_pre_ping=True,
                         pool_recycle=3600,
                         connect_args={
