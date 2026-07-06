@@ -1,0 +1,51 @@
+# =============================================================================
+# .dockerignore — ZipAI External Data API
+# Excludes unnecessary files from the Docker build context for faster builds
+# and smaller images.
+# =============================================================================
+
+# Version control
+.git
+.github
+.gitignore
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment & secrets (loaded at runtime via env_file, NOT baked into image)
+.env
+.env.*
+!.env.example
+
+# Docker files (no need to copy themselves into the image)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation (not needed at runtime)
+README.md
+LICENSE
+docs/
+
+# OS artifacts
+.DS_Store
+Thumbs.db

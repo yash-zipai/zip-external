@@ -1,7 +1,18 @@
-.vscode
+# IDE / Editor
+.vscode/
+.idea/
+
+# Python
 .venv/
-.env
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Environment (keep .env.example tracked)
+.env
+.env.*
+!.env.example
+
+# Docker (local overrides only — docker-compose.yml IS tracked)
+docker-compose.override.yml
