@@ -1,0 +1,70 @@
+# =============================================================================
+# ZipAI External Data API — Docker Compose (Production)
+# =============================================================================
+#
+# This service connects to an EXTERNAL PostgreSQL database (AWS RDS).
+# No local database container is needed.
+#
+# Usage:
+#   docker compose up -d            # Start in detached mode
+#   docker compose logs -f api      # Stream logs
+#   docker compose down             # Stop and remove containers
+#
+# =============================================================================
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zipai-external-api
+    restart: unless-stopped
+
+    # ── Port mapping ──────────────────────────────────────────────────────
+    ports:
+      - "${API_PORT:-8001}:8001"
+
+    # ── Environment ───────────────────────────────────────────────────────
+    # All secrets and config are loaded from the .env file.
+    # NEVER bake secrets into the image or docker-compose.yml.
+    env_file:
+      - .env
+
+    # ── Runtime overrides (can also be set in .env) ───────────────────────
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+
+    # ── Resource limits ───────────────────────────────────────────────────
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+    # ── Health check (mirrors the Dockerfile HEALTHCHECK) ─────────────────
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # ── Logging ───────────────────────────────────────────────────────────
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+        tag: "zipai-external-api"
+
+    # ── Security ──────────────────────────────────────────────────────────
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
