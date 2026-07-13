@@ -3,11 +3,13 @@ ZipAI — Healthcare Data Repository (DAL).
 
 Executes raw SQL queries against the ``healthcare`` schema.
 All queries use parameterised binds — never string interpolation.
-
 The SQL is kept close to the original queries provided by the
 healthcare data team, with pagination added.
-"""
 
+NULL-safety: aggregate columns are wrapped in COALESCE(..., 0) so that
+providers/zipcodes with no matching reviews return 0 instead of NULL,
+which the frontend was dropping.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -16,9 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # from logging import get_logger
-
 # logger = get_logger(__name__)
-
 
 # ── Valid categories (whitelist) ──────────────────────────────────────────────
 VALID_CATEGORIES = frozenset(
@@ -69,11 +69,11 @@ async def get_top_places(
             p.website,
             p.google_maps,
             p.rank,
-            ROUND(AVG(r.review_rating), 2)   AS avg_rating,
-            COUNT(r.review_id)               AS review_count,
+            COALESCE(ROUND(AVG(r.review_rating), 2), 0)   AS avg_rating,
+            COUNT(r.review_id)                            AS review_count,
             p.latitude,
             p.longitude,
-            MIN(i.image_url)                 AS thumbnail_url
+            COALESCE(MIN(i.image_url), '')                AS thumbnail_url
         FROM healthcare.healthcare_provider p
         LEFT JOIN healthcare.healthcare_reviews r  ON r.provider_id = p.provider_id
         LEFT JOIN healthcare.healthcare_images  i  ON i.provider_id = p.provider_id
@@ -81,7 +81,8 @@ async def get_top_places(
           {category_clause}
         GROUP BY
             p.provider_id, p.provider_name, p.category,
-            p.address, p.phone, p.website, p.google_maps, p.rank
+            p.address, p.phone, p.website, p.google_maps, p.rank,
+            p.latitude, p.longitude
         ORDER BY p.category, p.rank ASC
         LIMIT :limit OFFSET :offset
     """)
@@ -119,11 +120,13 @@ async def get_breakdown(
         SELECT
             bucket,
             COUNT(DISTINCT p.provider_id)                               AS provider_count,
-            ROUND(AVG(r.review_rating)::numeric, 2)                     AS avg_rating,
+            COALESCE(ROUND(AVG(r.review_rating)::numeric, 2), 0)        AS avg_rating,
             COUNT(r.review_id)                                          AS total_reviews,
-            ROUND(
-                (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric,
-                2
+            COALESCE(
+                ROUND(
+                    (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric,
+                    2
+                ), 0
             )                                                           AS score
         FROM (
             SELECT
@@ -181,11 +184,13 @@ async def get_index_scores(
             p.zipcode,
             p.city,
             COUNT(DISTINCT p.provider_id)                               AS total_providers,
-            ROUND(AVG(r.review_rating)::numeric, 2)                     AS overall_avg_rating,
+            COALESCE(ROUND(AVG(r.review_rating)::numeric, 2), 0)        AS overall_avg_rating,
             COUNT(r.review_id)                                          AS total_reviews,
-            ROUND(
-                (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric,
-                2
+            COALESCE(
+                ROUND(
+                    (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric,
+                    2
+                ), 0
             )                                                           AS healthcare_index_score
         FROM healthcare.healthcare_provider p
         LEFT JOIN healthcare.healthcare_reviews r ON r.provider_id = p.provider_id
@@ -266,7 +271,7 @@ async def get_map_pins(
             p.provider_name,
             p.latitude,
             p.longitude,
-            p.rating          AS avg_rating,
+            COALESCE(p.rating, 0)   AS avg_rating,
             p.google_maps
         FROM healthcare.healthcare_provider p
         {where_clause}
