@@ -69,7 +69,7 @@ async def get_education_breakdown(
                                       / NULLIF(d.teachers_fte, 0)), 0)
                )))                                        AS education_index
         FROM schools.schools_details d
-        JOIN state_ratio sr USING (school_category)
+        left JOIN state_ratio sr USING (school_category)
         WHERE d.zipcode = :zip
         GROUP BY d.school_category, sr.median_ratio
         ORDER BY d.school_category;
