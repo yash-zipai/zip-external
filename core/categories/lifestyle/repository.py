@@ -64,14 +64,14 @@ async def get_top_places(
             lp.place_id,
             lp.place_name,
             lp.category,
-            lp.address,
-            lp.phone,
-            lp.website,
-            lp.google_maps,
-            lp.hours,
-            lp.rank,
-            lp.rating          AS avg_rating,
-            lp.reviews_count   AS review_count,
+            COALESCE(lp.address,'')                        AS address,
+            COALESCE(lp.phone,'')                          AS phone,
+            COALESCE(lp.website,'')                        AS website,
+            COALESCE(lp.google_maps,'')                    AS google_maps,
+            COALESCE(array_to_string(lp.hours, ', '), '')  AS hours,
+            COALESCE(lp.rank,0)                            AS rank,
+            COALESCE(lp.rating,0)                          AS avg_rating,
+            COALESCE(lp.reviews_count,0)                   AS review_count,
             lp.latitude,
             lp.longitude,
             MIN(li.image_url)  AS thumbnail_url
@@ -117,7 +117,7 @@ async def get_breakdown(
             zipcode,
             city,
             category,
-            ROUND(AVG(rating)::numeric, 2)        AS avg_rating,
+            COALESCE(ROUND(AVG(rating)::numeric, 2),0)        AS avg_rating,
             COUNT(place_id)                       AS total_places,
             COALESCE(SUM(reviews_count), 0)       AS total_reviews
         FROM lifestyle.lifestyle_place
@@ -151,7 +151,7 @@ async def get_index_scores(
             lp.zipcode,
             MAX(lp.city)                          AS city,
             COUNT(*)                              AS total_places,
-            ROUND(AVG(lp.rating)::numeric, 2)     AS overall_avg_rating,
+            COALESCE(ROUND(AVG(lp.rating)::numeric, 2),0)     AS overall_avg_rating,
             COALESCE(SUM(lp.reviews_count), 0)    AS total_reviews,
             LEAST(
                 ROUND(
@@ -232,7 +232,7 @@ async def get_map_pins(
             lp.category,
             lp.latitude,
             lp.longitude,
-            lp.rating          AS avg_rating,
+            COALESCE(lp.rating,0)     AS avg_rating,
             MIN(li.image_url)  AS thumbnail_url
         FROM lifestyle.lifestyle_place lp
         LEFT JOIN lifestyle.lifestyle_image li  ON li.place_id = lp.place_id
