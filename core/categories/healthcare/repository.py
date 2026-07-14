@@ -186,12 +186,9 @@ async def get_index_scores(
             COUNT(DISTINCT p.provider_id)                               AS total_providers,
             COALESCE(ROUND(AVG(r.review_rating)::numeric, 2), 0)        AS overall_avg_rating,
             COUNT(r.review_id)                                          AS total_reviews,
-            COALESCE(
-                ROUND(
-                    (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric,
-                    2
-                ), 0
-            )                                                           AS healthcare_index_score
+            LEAST(ROUND(
+		     (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric,
+		  2) ,100)  AS healthcare_index_score
         FROM healthcare.healthcare_provider p
         LEFT JOIN healthcare.healthcare_reviews r ON r.provider_id = p.provider_id
         {where_clause}
