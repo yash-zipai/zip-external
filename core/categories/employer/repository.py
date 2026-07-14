@@ -57,20 +57,20 @@ async def get_breakdown(
     """
     sql = text("""
         SELECT
-            s.zipcode,
-            s.city,
-            s.county_fips,
-            s.zip_snapshot_year,
-            z.rank,
-            z.naics_code,
-            z.sector_name,
-            z.establishments_zip,
-            z.share_pct,
-            z.employment_county,
-            z.payroll_k_county,
-            z.establishments_county
+            coalesce(s.zipcode , '') as zipcode ,
+           	coalesce(s.city,'') as city,
+           	coalesce(s.county_fips,'') as county_fips,
+           	coalesce(s.zip_snapshot_year,0) as zip_snapshot_year,
+           	coalesce(z.rank,0) as rank,
+           	coalesce(z.naics_code,'') as naics_code,
+           	coalesce(z.sector_name,'') AS sector_name,
+           	coalesce(z.establishments_zip,0) as establishments_zip,
+           	coalesce(z.share_pct,0) as share_pct,
+           	coalesce(z.employment_county,0) as employment_county,
+           	coalesce(z.payroll_k_county,0) as payroll_k_county,
+           	coalesce(z.establishments_county,0) as establishments_county
         FROM employer.zip_snapshots s
-        JOIN employer.zip_industry_employer_stats z
+        LEFT JOIN employer.zip_industry_employer_stats z
             ON s.snapshot_id = z.snapshot_id
         WHERE s.zipcode = :zip
         ORDER BY z.rank ASC
@@ -103,14 +103,14 @@ async def get_index_score(
             s.zipcode,
             s.city,
             s.county_fips,
-            s.zip_snapshot_year,
+            coalesce(s.zip_snapshot_year,0) as zip_snapshot_year,
             ROUND(
                 (1 - SUM(POWER(COALESCE(z.share_pct, 0) / 100.0, 2))) * 100
             )::int                                            AS jobs_index_score,
             (ARRAY_AGG(z.sector_name ORDER BY z.rank ASC))[1] AS top_sector,
-            SUM(z.establishments_zip)                         AS establishment_count
+            coalesce(SUM(z.establishments_zip),0)         AS establishment_count
         FROM employer.zip_snapshots s
-        JOIN employer.zip_industry_employer_stats z
+        LEFT JOIN employer.zip_industry_employer_stats z
             ON s.snapshot_id = z.snapshot_id
         WHERE s.zipcode = :zip
         GROUP BY s.zipcode, s.city, s.county_fips, s.zip_snapshot_year
