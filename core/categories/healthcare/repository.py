@@ -122,12 +122,8 @@ async def get_breakdown(
             COUNT(DISTINCT p.provider_id)                               AS provider_count,
             COALESCE(ROUND(AVG(r.review_rating)::numeric, 2), 0)        AS avg_rating,
             COUNT(r.review_id)                                          AS total_reviews,
-            COALESCE(
-                ROUND(
-                    (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric,
-                    2
-                ), 0
-            )                                                           AS score
+            ROUND(
+            (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric, 2)   AS score
         FROM (
             SELECT
                 provider_id,
