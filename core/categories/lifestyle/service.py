@@ -54,7 +54,7 @@ def _to_float(value: Any) -> float | None:
         return None
 
 
-def _to_int(value: Any) -> int:
+def _to_int(value: Any) -> int | None:
     """Safely convert a numeric DB value to an int, defaulting to 0."""
     if value is None:
         return None
