@@ -148,9 +148,9 @@ async def get_index_scores(
     """
     sql = text("""
         SELECT
-            lp.zipcode,
+            :zip as zipcode,
             MAX(lp.city)                          AS city,
-            COUNT(place_id)                              AS total_places,
+            COUNT(lp.place_name)                              AS total_places,
             ROUND(AVG(lp.rating)::numeric, 2)     AS overall_avg_rating,
             SUM(lp.reviews_count)    AS total_reviews,
             CASE  WHEN AVG(lp.rating) IS NULL THEN NULL
