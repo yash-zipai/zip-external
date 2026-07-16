@@ -183,9 +183,9 @@ class LifestyleService:
         return IndexScoresResponse(
             zipcode=zipcode,
             city=row.get("city"),
-            total_places=_to_int_or_none(row.get("total_places")),
+            total_places=_to_int(row.get("total_places")),
             overall_avg_rating=_to_float(row.get("overall_avg_rating")),
-            total_reviews=_to_int_or_none(row.get("total_reviews")),
+            total_reviews=_to_int(row.get("total_reviews")),
             lifestyle_index_score=_to_int_or_none(row.get("lifestyle_index_score")),
         )
 
