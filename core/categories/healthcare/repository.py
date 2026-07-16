@@ -180,20 +180,18 @@ async def get_index_scores(
     """)
 
     data_sql = text(f"""
-        SELECT
-            p.zipcode,
-            p.city,
-            COUNT(DISTINCT p.provider_id)                               AS total_providers,
-            COALESCE(ROUND(AVG(r.review_rating)::numeric, 2), 0)        AS overall_avg_rating,
-            COUNT(r.review_id)                                          AS total_reviews,
-            LEAST(ROUND(
-		     (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric,
-		  2) ,100)  AS healthcare_index_score
-        FROM healthcare.healthcare_provider p
-        LEFT JOIN healthcare.healthcare_reviews r ON r.provider_id = p.provider_id
+	    SELECT
+	    :zip                                          AS zipcode,
+	    MAX(p.city)                                   AS city,
+	    COUNT(DISTINCT p.provider_id)                 AS total_providers,
+	    ROUND(AVG(r.review_rating)::numeric, 2)       AS overall_avg_rating,   -- NULL when no reviews
+	    COUNT(r.review_id)                            AS total_reviews,
+	    ROUND(
+	        (AVG(r.review_rating) * LN(NULLIF(COUNT(r.review_id), 0)))::numeric, 2
+	    )                                             AS healthcare_index_score  -- already NULL when no reviews
+	    FROM healthcare.healthcare_provider p
+	    LEFT JOIN healthcare.healthcare_reviews r ON r.provider_id = p.provider_id
         {where_clause}
-        GROUP BY p.zipcode, p.city
-        ORDER BY healthcare_index_score DESC
         LIMIT :limit OFFSET :offset
     """)
 
