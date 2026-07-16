@@ -70,7 +70,7 @@ async def get_education_breakdown(
                    ELSE round(greatest(0, least(100,
                             100 * sr.median_ratio
                             / avg(d.enrollment::numeric / NULLIF(d.teachers_fte, 0)))))
-               END                                        AS education_index,
+               END                                        AS education_index
         FROM schools.schools_details d
         left JOIN state_ratio sr USING (school_category)
         WHERE d.zipcode = :zip
