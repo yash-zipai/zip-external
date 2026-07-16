@@ -16,7 +16,7 @@ async def get_schools_k12(
 ) -> list[dict[str, Any]]:
     sql = text("""
         SELECT nces_id, school_name, school_category, school_type, level_type,
-               low_grade, high_grade, enrollment, teachers_fte,
+               low_grade, high_grade, enrollment, teachers_fte,rating, reviews_count,
                rank_in_zip, latitude, longitude, address, phone
         FROM schools.schools_details
         WHERE zipcode = :zip
@@ -33,7 +33,7 @@ async def get_schools_higher_ed(
 ) -> list[dict[str, Any]]:
     sql = text("""
         SELECT nces_id, school_name, school_type, enrollment,
-               admission_rate, completion_rate, tuition_in, tuition_out,
+               admission_rate, completion_rate, tuition_in, tuition_out,rating, reviews_count,
                school_url, rank_in_zip, latitude, longitude, address, phone
         FROM schools.schools_details
         WHERE zipcode = :zip
@@ -63,6 +63,8 @@ async def get_education_breakdown(
                sum(d.enrollment)                          AS total_students,
                round(avg(d.enrollment::numeric
                          / NULLIF(d.teachers_fte, 0)), 1) AS avg_students_per_teacher,
+             ROUND(AVG(d.rating)::numeric, 2)           AS avg_rating,          -- NULL if no rated schools
+             COUNT(d.rating)                            AS rated_school_count,  -- how many have a rating
                CASE
                    WHEN sr.median_ratio IS NULL
                      OR avg(d.enrollment::numeric / NULLIF(d.teachers_fte, 0)) IS NULL
@@ -91,7 +93,7 @@ async def get_school_details(
                low_grade, high_grade, enrollment, teachers_fte,
                round(enrollment::numeric / NULLIF(teachers_fte, 0), 1)
                     AS students_per_teacher,
-               admission_rate, completion_rate, tuition_in, tuition_out,
+               admission_rate, completion_rate, tuition_in, tuition_out,rating, reviews_count,
                 rank_in_zip, latitude, longitude, data_year
         FROM schools.schools_details
         WHERE nces_id = :nces_id;
@@ -120,7 +122,7 @@ async def get_map_pins(
     where_clause = "WHERE " + " AND ".join(conditions)
 
     sql = text(f"""
-        SELECT nces_id, school_name, school_category, latitude, longitude
+        SELECT nces_id, school_name, school_category, rating, reviews_count,latitude, longitude
         FROM schools.schools_details
         {where_clause}
         LIMIT :limit;
