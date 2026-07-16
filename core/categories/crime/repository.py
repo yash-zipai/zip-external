@@ -111,7 +111,8 @@ async def get_breakdown(
         )
         SELECT
             c.zipcode,
-            ROUND((100 - LEAST(SUM(c.rate), 100))::numeric, 2)   AS crime_index,
+            CASE WHEN COUNT(*) = 0 THEN NULL
+            ELSE ROUND((100 * LEAST(SUM(c.rate) / 800.0, 1))::numeric, 2) END AS crime_index,
             SUM(CASE WHEN c.crime_class = 'violent'
                      THEN c.actual_count ELSE 0 END)             AS violent_total,
             SUM(CASE WHEN c.crime_class = 'property'
