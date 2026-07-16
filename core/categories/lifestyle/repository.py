@@ -118,7 +118,7 @@ async def get_breakdown(
             city,
             category,
             ROUND(AVG(rating)::numeric, 2)        AS avg_rating,
-            COUNT(place_id)                       AS total_places,
+            COUNT(place_name)                       AS total_places,
             SUM(reviews_count)      AS total_reviews
         FROM lifestyle.lifestyle_place
         WHERE zipcode = :zip
