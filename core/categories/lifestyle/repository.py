@@ -150,7 +150,7 @@ async def get_index_scores(
         SELECT
             lp.zipcode,
             MAX(lp.city)                          AS city,
-            COUNT(*)                              AS total_places,
+            COUNT(place_id)                              AS total_places,
             ROUND(AVG(lp.rating)::numeric, 2)     AS overall_avg_rating,
             SUM(lp.reviews_count)    AS total_reviews,
             CASE  WHEN AVG(lp.rating) IS NULL THEN NULL
@@ -164,7 +164,6 @@ async def get_index_scores(
          END      AS lifestyle_index_score
         FROM lifestyle.lifestyle_place lp
         WHERE lp.zipcode = :zip
-        GROUP BY lp.zipcode
     """)
 
     result = await session.execute(sql, {"zip": zipcode})
