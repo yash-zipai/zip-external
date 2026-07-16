@@ -69,11 +69,11 @@ async def get_top_places(
             p.website,
             p.google_maps,
             p.rank,
-            COALESCE(ROUND(AVG(r.review_rating), 2), 0)   AS avg_rating,
+            ROUND(AVG(r.review_rating), 2)  AS avg_rating,
             COUNT(r.review_id)                            AS review_count,
             p.latitude,
             p.longitude,
-            COALESCE(MIN(i.image_url), '')                AS thumbnail_url
+            MIN(i.image_url)               AS thumbnail_url
         FROM healthcare.healthcare_provider p
         LEFT JOIN healthcare.healthcare_reviews r  ON r.provider_id = p.provider_id
         LEFT JOIN healthcare.healthcare_images  i  ON i.provider_id = p.provider_id
@@ -262,7 +262,7 @@ async def get_map_pins(
             p.provider_name,
             p.latitude,
             p.longitude,
-            COALESCE(p.rating, 0)   AS avg_rating,
+            p.rating  AS avg_rating,
             p.google_maps
         FROM healthcare.healthcare_provider p
         {where_clause}
