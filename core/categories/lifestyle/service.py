@@ -57,11 +57,11 @@ def _to_float(value: Any) -> float | None:
 def _to_int(value: Any) -> int:
     """Safely convert a numeric DB value to an int, defaulting to 0."""
     if value is None:
-        return 0
+        return None
     try:
         return int(value)
     except (TypeError, ValueError):
-        return 0
+        return None
 
 
 class LifestyleService:
