@@ -78,6 +78,8 @@ class SchoolService:
                 longitude=_to_float(row.get("longitude")),
                 address=row.get("address"),
                 phone=row.get("phone"),
+                rating=_to_float(row.get("rating")),
+                reviews_count=_to_int(row.get("reviews_count")),
             )
             for row in rows
         ]
@@ -106,6 +108,8 @@ class SchoolService:
                 longitude=_to_float(row.get("longitude")),
                 address=row.get("address"),
                 phone=row.get("phone"),
+                rating=_to_float(row.get("rating")),
+                reviews_count=_to_int(row.get("reviews_count")),
             )
             for row in rows
         ]
@@ -125,6 +129,8 @@ class SchoolService:
                 total_students=_to_int(row.get("total_students")),
                 avg_students_per_teacher=_to_float(row.get("avg_students_per_teacher")),
                 education_index=_to_float(row.get("education_index")),
+                avg_rating=_to_float(row.get("avg_rating")),
+                rated_school_count=_to_int(row.get("rated_school_count")),
             )
             for row in rows
         ]
@@ -164,6 +170,8 @@ class SchoolService:
             latitude=_to_float(row.get("latitude")),
             longitude=_to_float(row.get("longitude")),
             data_year=str(row.get("data_year")) if row.get("data_year") else None,
+            rating=_to_float(row.get("rating")),
+            reviews_count=_to_int(row.get("reviews_count")),
         )
 
     @staticmethod
@@ -180,6 +188,8 @@ class SchoolService:
                 school_category=row.get("school_category"),
                 latitude=_to_float(row.get("latitude")),
                 longitude=_to_float(row.get("longitude")),
+                rating=_to_float(row.get("rating")),
+                reviews_count=_to_int(row.get("reviews_count")),
             )
             for row in rows
         ]
