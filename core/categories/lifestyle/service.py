@@ -54,15 +54,23 @@ def _to_float(value: Any) -> float | None:
         return None
 
 
-def _to_int(value: Any) -> int | None:
+def _to_int(value: Any) -> int:
     """Safely convert a numeric DB value to an int, defaulting to 0."""
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+        
+def _to_int_or_none(value: Any) -> int | None:
+    """Numeric DB value -> int, keeping None as None (for 'no data' scores)."""
     if value is None:
         return None
     try:
         return int(value)
     except (TypeError, ValueError):
         return None
-
 
 class LifestyleService:
     """Business logic for lifestyle API endpoints."""
@@ -175,10 +183,10 @@ class LifestyleService:
         return IndexScoresResponse(
             zipcode=zipcode,
             city=row.get("city"),
-            total_places=_to_int(row.get("total_places")),
+            total_places=_to_int_or_none(row.get("total_places")),
             overall_avg_rating=_to_float(row.get("overall_avg_rating")),
-            total_reviews=_to_int(row.get("total_reviews")),
-            lifestyle_index_score=_to_int(row.get("lifestyle_index_score")),
+            total_reviews=_to_int_or_none(row.get("total_reviews")),
+            lifestyle_index_score=_to_int_or_none(row.get("lifestyle_index_score")),
         )
 
     @staticmethod
