@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.categories.analytics.schemas import ClickStatsResponse
 from core.categories.analytics.repository import get_click_counts
+from core.cache import cached, analytics_stats_cache    
 
 # Vector's HTTP source. On this EC2 (systemd), Vector runs on the same host,
 # so localhost. (If you ever move to docker-compose, use http://vector:8080.)
