@@ -32,6 +32,8 @@ from core.categories.employer.routes import router as jobs_router
 
 from core.categories.audit.routes import router as audit_router
 
+from core.categories.analytics.routes import router as analytics_router
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — dispose every per-schema engine on shutdown."""
@@ -73,6 +75,11 @@ def create_app() -> FastAPI:
 
     #audit
     app.include_router(audit_router, prefix="/v1")
+    
+    #vector
+    app.include_router(analytics_router, prefix="/api")   # match the prefix used by your other routers
+    
+
 
 
     return app
