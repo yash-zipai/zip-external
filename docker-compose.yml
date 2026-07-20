@@ -69,26 +69,4 @@ services:
     tmpfs:
       - /tmp:size=64M
 
-   # ── Vector: click-analytics pipeline ────────────────────────────────────
-    vector:
-      image: timberio/vector:0.40.0-alpine
-      container_name: zipai-vector
-      restart: unless-stopped
-      volumes:
-        - ./vector.yaml:/etc/vector/vector.yaml:ro   # config (read-only)
-        - vector_data:/var/lib/vector                # disk buffer (MUST be writable)
-      env_file:
-        - .env                                       # gives Vector VECTOR_DB_URL
-      expose:
-        - "8080"                                     # internal only — NOT published to the internet
-      security_opt:
-        - no-new-privileges:true
-      logging:
-        driver: json-file
-        options:
-          max-size: "10m"
-          max-file: "5"
-          tag: "zipai-vector"
-    
-    volumes:
-    vector_data:      # persists Vector's disk buffer across restarts
+ 
