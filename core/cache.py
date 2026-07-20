@@ -61,8 +61,6 @@ jobs_score_cache     = TTLCache(maxsize=256, ttl=900)
 #audit
 audit_logs_cache = TTLCache(maxsize=256, ttl=900)
 
-#analytics
-analytics_stats_cache = TTLCache(maxsize=256, ttl=900)   # short TTL — counts change often
 
 
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
