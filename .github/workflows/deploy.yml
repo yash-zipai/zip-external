@@ -34,7 +34,16 @@ jobs:
           git fetch origin
           git reset --hard origin/main
 
-
+          echo "Write .env from GitHub secrets"     # <-- ADD FROM HERE
+          
+          cat > .env << 'ENVEOF'
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_PORT=5432
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          ENVEOF
+         
           echo "Activate venv"
 
           source venv/bin/activate
