@@ -17,7 +17,7 @@ sinks:
   postgres_out:
     type: postgres
     inputs: [enrich]
-    endpoint: "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}"
+    endpoint: "${VECTOR_DB_URL}"
     table: "analytics.page_clicks"
     batch:
       max_events: 500
