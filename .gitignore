@@ -11,6 +11,7 @@ __pycache__/
 
 # Environment (keep .env.example tracked)
 .env
+vector/vector.env
 .env.*
 !.env.example
 
