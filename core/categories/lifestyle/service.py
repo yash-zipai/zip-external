@@ -63,6 +63,14 @@ def _to_int(value: Any) -> int:
     except (TypeError, ValueError):
         return 0
 
+def _to_int_or_none(value: Any) -> int | None:
+    """Numeric DB value -> int, keeping None as None (for 'no data' scores)."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 class LifestyleService:
     """Business logic for lifestyle API endpoints."""
@@ -178,7 +186,7 @@ class LifestyleService:
             total_places=_to_int(row.get("total_places")),
             overall_avg_rating=_to_float(row.get("overall_avg_rating")),
             total_reviews=_to_int(row.get("total_reviews")),
-            lifestyle_index_score=_to_int(row.get("lifestyle_index_score")),
+            lifestyle_index_score=_to_int_or_none(row.get("lifestyle_index_score")),
         )
 
     @staticmethod

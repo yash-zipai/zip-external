@@ -16,3 +16,4 @@ __pycache__/
 
 # Docker (local overrides only — docker-compose.yml IS tracked)
 docker-compose.override.yml
+.env

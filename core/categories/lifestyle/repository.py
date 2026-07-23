@@ -64,14 +64,14 @@ async def get_top_places(
             lp.place_id,
             lp.place_name,
             lp.category,
-            lp.address,
-            lp.phone,
-            lp.website,
-            lp.google_maps,
-            lp.hours,
-            lp.rank,
-            lp.rating          AS avg_rating,
-            lp.reviews_count   AS review_count,
+            lp.address                        AS address,
+            lp.phone                          AS phone,
+            lp.website                        AS website,
+            lp.google_maps                    AS google_maps,
+            array_to_string(lp.hours, ', ')  AS hours,
+            lp.rank                            AS rank,
+            lp.rating                       AS avg_rating,
+            lp.reviews_count                   AS review_count,
             lp.latitude,
             lp.longitude,
             MIN(li.image_url)  AS thumbnail_url
@@ -152,7 +152,7 @@ async def get_index_scores(
             MAX(lp.city)                          AS city,
             COUNT(*)                              AS total_places,
             ROUND(AVG(lp.rating)::numeric, 2)     AS overall_avg_rating,
-            COALESCE(SUM(lp.reviews_count), 0)    AS total_reviews,
+            SUM(lp.reviews_count)    AS total_reviews,
             LEAST(
                 ROUND(
                     ((AVG(lp.rating) / 5.0) * 70)

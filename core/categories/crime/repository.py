@@ -40,30 +40,40 @@ async def get_index_scores(
         WITH latest_year AS (
             SELECT MAX(year) AS yr
             FROM crime.crime_history
-            WHERE zipcode = :zip
-              AND current_flag = 'Y'
+            WHERE zipcode = :zip AND current_flag = 'Y'
+        ),
+        agg AS (
+            SELECT
+                MAX(c.city)  AS city,
+                COUNT(*)     AS n,
+                SUM(c.rate)  AS total_rate,
+                SUM(CASE WHEN c.crime_class='violent'  THEN c.actual_count ELSE 0 END) AS violent_total,
+                SUM(CASE WHEN c.crime_class='property' THEN c.actual_count ELSE 0 END) AS property_total
+            FROM crime.crime_history c
+            JOIN latest_year y ON c.year = y.yr
+            WHERE c.zipcode = :zip AND c.current_flag = 'Y'
         )
         SELECT
-            c.zipcode,
-            MAX(c.city)                                          AS city,
-            ROUND((100 - LEAST(SUM(c.rate), 100))::numeric, 2)   AS crime_index,
-            ROUND((100 - LEAST(SUM(c.rate), 100))::numeric, 2)   AS safety_pct,
+            :zip AS zipcode,
+            city,
+            -- one safety number; MAX_CRIME_RATE is the tunable ceiling (see below)
+            CASE WHEN n = 0 THEN NULL
+                 ELSE ROUND((100 * (1 - LEAST(total_rate / 800.0, 1)))::numeric, 2)
+            END AS safety_pct,                                   -- higher = safer
+            CASE WHEN n = 0 THEN NULL
+                 ELSE ROUND((100 * LEAST(total_rate / 800.0, 1))::numeric, 2)
+            END AS crime_index,                                  -- = 100 - safety_pct
             CASE
-                WHEN (100 - LEAST(SUM(c.rate), 100)) >= 80 THEN 'Very Low'
-                WHEN (100 - LEAST(SUM(c.rate), 100)) >= 60 THEN 'Low'
-                WHEN (100 - LEAST(SUM(c.rate), 100)) >= 40 THEN 'Moderate'
+                WHEN n = 0 THEN NULL
+                WHEN (100 * (1 - LEAST(total_rate / 800.0, 1))) >= 80 THEN 'Very Low'
+                WHEN (100 * (1 - LEAST(total_rate / 800.0, 1))) >= 60 THEN 'Low'
+                WHEN (100 * (1 - LEAST(total_rate / 800.0, 1))) >= 40 THEN 'Moderate'
                 ELSE 'High'
-            END                                                  AS level,
-            SUM(CASE WHEN c.crime_class = 'violent'
-                     THEN c.actual_count ELSE 0 END)             AS violent_total,
-            SUM(CASE WHEN c.crime_class = 'property'
-                     THEN c.actual_count ELSE 0 END)             AS property_total,
-            CURRENT_DATE                                         AS as_of
-        FROM crime.crime_history c
-        JOIN latest_year y ON c.year = y.yr
-        WHERE c.zipcode = :zip
-          AND c.current_flag = 'Y'
-        GROUP BY c.zipcode
+            END AS level,
+            violent_total,
+            property_total,
+            CURRENT_DATE AS as_of
+        FROM agg;
     """)
 
     result = await session.execute(sql, {"zip": zipcode})
@@ -101,7 +111,8 @@ async def get_breakdown(
         )
         SELECT
             c.zipcode,
-            ROUND((100 - LEAST(SUM(c.rate), 100))::numeric, 2)   AS crime_index,
+            CASE WHEN COUNT(*) = 0 THEN NULL
+            ELSE ROUND((100 * LEAST(SUM(c.rate) / 800.0, 1))::numeric, 2) END AS crime_index,
             SUM(CASE WHEN c.crime_class = 'violent'
                      THEN c.actual_count ELSE 0 END)             AS violent_total,
             SUM(CASE WHEN c.crime_class = 'property'

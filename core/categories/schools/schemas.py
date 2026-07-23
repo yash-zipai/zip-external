@@ -25,6 +25,8 @@ class SchoolK12Item(BaseModel):
     longitude: float | None = None
     address: str | None = None
     phone: str | None = None
+    rating: float | None = None
+    reviews_count: int | None = None
 
 
 class SchoolK12Response(BaseModel):
@@ -50,6 +52,8 @@ class SchoolHigherEdItem(BaseModel):
     longitude: float | None = None
     address: str | None = None
     phone: str | None = None
+    rating: float | None = None
+    reviews_count: int | None = None
 
 
 class SchoolHigherEdResponse(BaseModel):
@@ -66,7 +70,8 @@ class EducationBreakdownItem(BaseModel):
     total_students: int | None = None
     avg_students_per_teacher: float | None = None
     education_index: float | None = None
-
+    avg_rating: float | None = None
+    rated_school_count: int | None = None
 
 class EducationBreakdownResponse(BaseModel):
     zipcode: str
@@ -101,7 +106,8 @@ class SchoolDetailResponse(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     data_year: str | None = None
-
+    rating: float | None = None
+    reviews_count: int | None = None
 
 # ── Map Pins ─────────────────────────────────────────────────────────────────
 
@@ -110,6 +116,8 @@ class SchoolMapPinItem(BaseModel):
     nces_id: str | None = None
     school_name: str | None = None
     school_category: str | None = None
+    rating: float | None = None
+    reviews_count: int | None = None
     latitude: float | None = None
     longitude: float | None = None
 
