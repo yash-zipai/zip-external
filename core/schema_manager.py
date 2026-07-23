@@ -68,6 +68,7 @@ class SchemaSessionManager:
                         connect_args={
                             "server_settings": {
                                 "search_path": f"{schema},public",
+                                "application_name": "zipai-external",
                             }
                         },
                     )
