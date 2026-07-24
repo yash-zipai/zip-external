@@ -19,8 +19,10 @@ api:
 sources:
 
   zipai_logs:
-    type: C:\temp\zipai.log
-
+    type: file
+    include:
+      - 'C:\temp\zipai.log'
+    
     include_containers:
       - zipai-external-api
 
