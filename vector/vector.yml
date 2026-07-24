@@ -19,7 +19,7 @@ api:
 sources:
 
   zipai_logs:
-    type: docker_logs
+    type: C:\temp\zipai.log
 
     include_containers:
       - zipai-external-api
