@@ -1,25 +1,20 @@
 """
 Analytics API Routes.
 
-Included by main.py WITHOUT a prefix:
+Included by main.py with the /v1 prefix:
 
-    app.include_router(analytics_router)
+    app.include_router(analytics_router, prefix="/v1")
 
-Available Endpoints:
-
-    POST /internal/vector/events
-
-    GET /v1/analytics/house/{house_id}/views
-
-    GET /v1/analytics/usage
-
-Save as:
-core/analytics/routes.py
+Endpoints:
+    POST /v1/analytics/track          -> called by the WEBSITE (frontend). Writes a log line.
+    POST /v1/internal/vector/events   -> called by VECTOR. Inserts into the DB.
+    GET  /v1/analytics/house/{house_id}/views
+    GET  /v1/analytics/usage
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-import traceback
+
 from core.schema_manager import get_schema_session
 
 from .schemas import (
@@ -30,12 +25,59 @@ from .schemas import (
 
 from .service import AnalyticsService
 
+from .logger import log_event
+
 
 router = APIRouter(tags=["Analytics"])
 
 
+def _client_ip(request: Request) -> str | None:
+    """Best-effort client IP, honouring a proxy/load-balancer's X-Forwarded-For."""
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
 # ============================================================================
-# Internal Vector Endpoint
+# Public tracking endpoint — called by the website frontend.
+#
+#   frontend -> /v1/analytics/track -> log line -> Vector -> /internal/vector/events -> DB
+#
+# The browser sends what it knows (zipcode, session, page, device); here we
+# stamp on the things the browser can't be trusted for (IP, country).
+# ============================================================================
+
+@router.post(
+    "/v1/analytics/track",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Track an analytics event from the website",
+    description="Public endpoint the website frontend calls to record a user event.",
+)
+async def track_event(payload: AnalyticsEventRequest, request: Request):
+    # Server-side enrichment: IP from the request, country from an edge header
+    # (e.g. Cloudflare's CF-IPCountry) if present. Both land in metadata (JSONB).
+    meta = dict(payload.metadata or {})
+    meta.setdefault("ip", _client_ip(request))
+    meta.setdefault("country", request.headers.get("cf-ipcountry"))
+
+    log_event(
+        event_type=payload.event_type,
+        category=payload.category,
+        action=payload.action,
+        user_id=payload.user_id,
+        session_id=payload.session_id,
+        resource_id=payload.resource_id,
+        zipcode=payload.zipcode,
+        page_name=payload.page_name,
+        metadata=meta,
+    )
+
+    return {"message": "event logged"}
+
+
+# ============================================================================
+# Internal Vector endpoint — called by Vector (accepts a batched JSON array).
 # ============================================================================
 
 @router.post(
@@ -45,26 +87,22 @@ router = APIRouter(tags=["Analytics"])
     description="Internal endpoint used by Vector.dev to send analytics events.",
 )
 async def receive_vector_event(
-    payload: AnalyticsEventRequest,
+    request: Request,
     db: AsyncSession = Depends(get_schema_session("analytics")),
 ):
-    try:
-        await AnalyticsService.insert_event(
-            session=db,
-            event=payload,
-        )
+    # Vector's HTTP sink batches events into a JSON ARRAY: [ {...}, {...} ].
+    body = await request.json()
+    raw_events = body if isinstance(body, list) else [body]
 
-        return {
-            "message": "Event received successfully"
-        }
+    for raw in raw_events:
+        event = AnalyticsEventRequest(**raw)
+        await AnalyticsService.insert_event(session=db, event=event)
 
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": f"{len(raw_events)} event(s) received successfully"}
+
 
 # ============================================================================
-# API 1
-# How many people viewed this house
+# API 1 — How many people viewed this house
 # ============================================================================
 
 @router.get(
@@ -94,8 +132,7 @@ async def get_house_views(
 
 
 # ============================================================================
-# API 2
-# How people use ZIPAI
+# API 2 — How people use ZIPAI
 # ============================================================================
 
 @router.get(
@@ -108,4 +145,4 @@ async def get_zipai_usage(
 
     result = await AnalyticsService.get_zipai_usage(session=db)
 
-    return ZipAIUsageResponse(usage=result)
+    return result
