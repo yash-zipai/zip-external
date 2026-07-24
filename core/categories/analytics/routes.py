@@ -1,20 +1,25 @@
 """
 Analytics API Routes.
 
-Included by main.py with the /v1 prefix:
+Included by main.py WITHOUT a prefix:
 
-    app.include_router(analytics_router, prefix="/v1")
+    app.include_router(analytics_router)
 
-Endpoints:
-    POST /v1/analytics/track          -> called by the WEBSITE (frontend). Writes a log line.
-    POST /v1/internal/vector/events   -> called by VECTOR. Inserts into the DB.
-    GET  /v1/analytics/house/{house_id}/views
-    GET  /v1/analytics/usage
+Available Endpoints:
+
+    POST /internal/vector/events
+
+    GET /v1/analytics/house/{house_id}/views
+
+    GET /v1/analytics/usage
+
+Save as:
+core/analytics/routes.py
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status,Request
 from sqlalchemy.ext.asyncio import AsyncSession
-
+import traceback
 from core.schema_manager import get_schema_session
 
 from .schemas import (
@@ -25,59 +30,12 @@ from .schemas import (
 
 from .service import AnalyticsService
 
-from .logger import log_event
-
 
 router = APIRouter(tags=["Analytics"])
 
 
-def _client_ip(request: Request) -> str | None:
-    """Best-effort client IP, honouring a proxy/load-balancer's X-Forwarded-For."""
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.client.host if request.client else None
-
-
 # ============================================================================
-# Public tracking endpoint — called by the website frontend.
-#
-#   frontend -> /v1/analytics/track -> log line -> Vector -> /internal/vector/events -> DB
-#
-# The browser sends what it knows (zipcode, session, page, device); here we
-# stamp on the things the browser can't be trusted for (IP, country).
-# ============================================================================
-
-@router.post(
-    "/v1/analytics/track",
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Track an analytics event from the website",
-    description="Public endpoint the website frontend calls to record a user event.",
-)
-async def track_event(payload: AnalyticsEventRequest, request: Request):
-    # Server-side enrichment: IP from the request, country from an edge header
-    # (e.g. Cloudflare's CF-IPCountry) if present. Both land in metadata (JSONB).
-    meta = dict(payload.metadata or {})
-    meta.setdefault("ip", _client_ip(request))
-    meta.setdefault("country", request.headers.get("cf-ipcountry"))
-
-    log_event(
-        event_type=payload.event_type,
-        category=payload.category,
-        action=payload.action,
-        user_id=payload.user_id,
-        session_id=payload.session_id,
-        resource_id=payload.resource_id,
-        zipcode=payload.zipcode,
-        page_name=payload.page_name,
-        metadata=meta,
-    )
-
-    return {"message": "event logged"}
-
-
-# ============================================================================
-# Internal Vector endpoint — called by Vector (accepts a batched JSON array).
+# Internal Vector Endpoint
 # ============================================================================
 
 @router.post(
@@ -100,9 +58,9 @@ async def receive_vector_event(
 
     return {"message": f"{len(raw_events)} event(s) received successfully"}
 
-
 # ============================================================================
-# API 1 — How many people viewed this house
+# API 1
+# How many people viewed this house
 # ============================================================================
 
 @router.get(
@@ -132,7 +90,8 @@ async def get_house_views(
 
 
 # ============================================================================
-# API 2 — How people use ZIPAI
+# API 2
+# How people use ZIPAI
 # ============================================================================
 
 @router.get(
