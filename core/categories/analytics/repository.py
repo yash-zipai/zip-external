@@ -60,7 +60,7 @@ async def insert_event(
             "user_id": event.get("user_id"),
             "session_id": event.get("session_id"),
             "page_name": event.get("page_name"),
-            "metadata": event.get("metadata", {})
+            "metadata": json.dumps(event.get("metadata", {}))
         },
     )
 
