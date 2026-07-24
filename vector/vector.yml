@@ -1,0 +1,109 @@
+#################################################
+# Global Settings
+#################################################
+
+data_dir: /var/lib/vector
+
+#################################################
+# Vector API
+#################################################
+
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+
+#################################################
+# Sources
+#################################################
+
+sources:
+
+  zipai_logs:
+    type: docker_logs
+
+    include_containers:
+      - zipai-external-api
+
+#################################################
+# Transforms
+#################################################
+
+transforms:
+
+  parse_json:
+    type: remap
+    inputs:
+      - zipai_logs
+
+    source: |
+
+      # <-- CHANGED: parse safely. Non-JSON lines (uvicorn startup,
+      #     tracebacks, access logs) are left as-is instead of aborting
+      #     and flooding Vector's log with errors. The filter below drops
+      #     anything without .event_type anyway.
+      if exists(.message) {
+        parsed, err = parse_json(string!(.message))
+        if err == null {
+          . = object(parsed) ?? .
+        }
+      }
+
+  enrich:
+    type: remap
+    inputs:
+      - parse_json
+
+    source: |
+
+      .received_at = now()
+
+      .service = "zipai-external-api"
+
+      .environment = get_env_var("APP_ENV") ?? "production"
+
+#################################################
+# Filter
+#################################################
+
+  analytics_events:
+    type: filter
+
+    inputs:
+      - enrich
+
+    condition: exists(.event_type)
+
+#################################################
+# Sinks
+#################################################
+
+sinks:
+
+  console:
+    type: console
+
+    inputs:
+      - analytics_events
+
+    encoding:
+      codec: json
+
+  analytics_api:
+    type: http
+
+    inputs:
+      - analytics_events
+
+    uri: http://api:8001/internal/vector/events
+
+    method: post
+
+    encoding:
+      codec: json
+
+    request:
+      headers:
+        Content-Type: application/json
+
+    healthcheck:
+      enabled: true      # <-- left as-is. See note below if you see a boot warning.

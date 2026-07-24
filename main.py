@@ -31,7 +31,7 @@ from core.categories.cost_of_living.routes import router as cost_of_living_route
 from core.categories.employer.routes import router as jobs_router
 
 from core.categories.audit.routes import router as audit_router
-
+from core.categories.analytics.routes import router as analytics_router
 
 
 @asynccontextmanager
@@ -75,6 +75,9 @@ def create_app() -> FastAPI:
 
     #audit
     app.include_router(audit_router, prefix="/v1")
+
+    #analytics
+    app.include_router(analytics_router, prefix="/v1")
 
 
     return app
