@@ -61,8 +61,6 @@ jobs_score_cache     = TTLCache(maxsize=256, ttl=900)
 #audit
 audit_logs_cache = TTLCache(maxsize=256, ttl=900)
 
-#vector
-analytics_stats_cache = TTLCache(maxsize=256, ttl=900)
 
 
 
