@@ -19,7 +19,7 @@ core/analytics/routes.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
+import traceback
 from core.schema_manager import get_schema_session
 
 from .schemas import (
@@ -48,16 +48,19 @@ async def receive_vector_event(
     payload: AnalyticsEventRequest,
     db: AsyncSession = Depends(get_schema_session("analytics")),
 ):
+    try:
+        await AnalyticsService.insert_event(
+            session=db,
+            event=payload,
+        )
 
-    await AnalyticsService.insert_event(
-        session=db,
-        event=payload,
-    )
+        return {
+            "message": "Event received successfully"
+        }
 
-    return {
-        "message": "Event received successfully"
-    }
-
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
 # API 1
