@@ -8,6 +8,7 @@ core/analytics/repository.py
 from __future__ import annotations
 
 from typing import Any
+import json
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
