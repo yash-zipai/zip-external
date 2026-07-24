@@ -76,9 +76,6 @@ def create_app() -> FastAPI:
     #audit
     app.include_router(audit_router, prefix="/v1")
 
-    #Vector
-    app.include_router(analytics_router, prefix="/v1")
-
 
     return app
 
