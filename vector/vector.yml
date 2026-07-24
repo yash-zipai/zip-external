@@ -2,7 +2,7 @@
 # Global Settings
 #################################################
 
-data_dir: /var/lib/vector
+data_dir: "C:/temp/vector-data"          # <-- CHANGED: Windows path (create this folder). /var/lib/vector is Linux-only.
 
 #################################################
 # Vector API
@@ -21,10 +21,12 @@ sources:
   zipai_logs:
     type: file
     include:
-      - 'C:\temp\zipai.log'
-    
-    include_containers:
-      - zipai-external-api
+      - "C:/temp/zipai.log"               # <-- CHANGED: forward slashes (backslashes break Vector's glob on Windows)
+    read_from: beginning
+    ignore_older_secs: 86400
+
+    #include_containers:                   # (correctly commented out — that's a docker_logs field)
+    #  - zipai-external-api
 
 #################################################
 # Transforms
@@ -39,10 +41,6 @@ transforms:
 
     source: |
 
-      # <-- CHANGED: parse safely. Non-JSON lines (uvicorn startup,
-      #     tracebacks, access logs) are left as-is instead of aborting
-      #     and flooding Vector's log with errors. The filter below drops
-      #     anything without .event_type anyway.
       if exists(.message) {
         parsed, err = parse_json(string!(.message))
         if err == null {
@@ -96,7 +94,7 @@ sinks:
     inputs:
       - analytics_events
 
-    uri: http://api:8001/internal/vector/events
+    uri: http://localhost:8001/v1/internal/vector/events   # <-- CHANGED: localhost (not api:) + /v1 prefix
 
     method: post
 
@@ -108,4 +106,4 @@ sinks:
         Content-Type: application/json
 
     healthcheck:
-      enabled: true      # <-- left as-is. See note below if you see a boot warning.
+      enabled: false      # <-- CHANGED: was true. Avoids a boot failure if the API isn't up yet / the POST-only route 405s.
