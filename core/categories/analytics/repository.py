@@ -143,3 +143,108 @@ async def get_zipai_usage(
         dict(row._mapping)
         for row in result.fetchall()
     ]
+
+
+# ===========================================================
+# API 3 — Admin Insights (read queries over analytics.user_events)
+# "a user" = COALESCE(user_id, session_id)
+# "active" = has an event within the window (uses DB clock now())
+# ===========================================================
+
+INDEX_CATEGORIES = ["lifestyle", "healthcare", "crime", "schools", "cost_of_living", "employer"]
+
+
+async def _ins_scalar(session: AsyncSession, sql: str, params: dict | None = None):
+    return (await session.execute(text(sql), params or {})).scalar()
+
+
+async def _ins_rows(session: AsyncSession, sql: str, params: dict | None = None) -> list[dict]:
+    res = await session.execute(text(sql), params or {})
+    return [dict(r._mapping) for r in res.fetchall()]
+
+
+async def ins_total_users(session: AsyncSession) -> int:
+    return await _ins_scalar(
+        session,
+        "SELECT COUNT(DISTINCT COALESCE(user_id, session_id)) FROM analytics.user_events",
+    ) or 0
+
+
+async def ins_active_users(session: AsyncSession, days: int) -> int:
+    return await _ins_scalar(session, """
+        SELECT COUNT(DISTINCT COALESCE(user_id, session_id))
+        FROM analytics.user_events
+        WHERE created_at >= now() - (:days * interval '1 day')
+    """, {"days": days}) or 0
+
+
+async def ins_new_users(session: AsyncSession, days: int) -> int:
+    return await _ins_scalar(session, """
+        SELECT COUNT(*) FROM (
+            SELECT COALESCE(user_id, session_id) AS person, MIN(created_at) AS first_seen
+            FROM analytics.user_events
+            GROUP BY COALESCE(user_id, session_id)
+        ) t
+        WHERE first_seen >= now() - (:days * interval '1 day')
+    """, {"days": days}) or 0
+
+
+async def ins_top_zipcodes(session: AsyncSession, limit: int = 10) -> list[dict]:
+    return await _ins_rows(session, """
+        SELECT zipcode,
+               COUNT(DISTINCT COALESCE(user_id, session_id)) AS users,
+               COUNT(*) AS searches
+        FROM analytics.user_events
+        WHERE zipcode IS NOT NULL AND zipcode <> ''
+        GROUP BY zipcode ORDER BY searches DESC LIMIT :limit
+    """, {"limit": limit})
+
+
+async def ins_index_usage(session: AsyncSession):
+    total = await _ins_scalar(session, """
+        SELECT COUNT(DISTINCT COALESCE(user_id, session_id))
+        FROM analytics.user_events WHERE category = ANY(:cats)
+    """, {"cats": INDEX_CATEGORIES}) or 0
+    rows = await _ins_rows(session, """
+        SELECT category, COUNT(DISTINCT COALESCE(user_id, session_id)) AS users
+        FROM analytics.user_events WHERE category = ANY(:cats) GROUP BY category
+    """, {"cats": INDEX_CATEGORIES})
+    return int(total), {r["category"]: int(r["users"]) for r in rows}
+
+
+async def ins_total_events(session: AsyncSession) -> int:
+    return await _ins_scalar(session, "SELECT COUNT(*) FROM analytics.user_events") or 0
+
+
+async def ins_total_sessions(session: AsyncSession) -> int:
+    return await _ins_scalar(
+        session,
+        "SELECT COUNT(DISTINCT session_id) FROM analytics.user_events WHERE session_id IS NOT NULL",
+    ) or 0
+
+
+async def ins_top_houses(session: AsyncSession, limit: int = 10) -> list[dict]:
+    return await _ins_rows(session, """
+        SELECT resource_id, COUNT(*) AS views
+        FROM analytics.user_events
+        WHERE event_type = 'house_view' AND resource_id IS NOT NULL
+        GROUP BY resource_id ORDER BY views DESC LIMIT :limit
+    """, {"limit": limit})
+
+
+async def ins_top_pages(session: AsyncSession, limit: int = 10) -> list[dict]:
+    return await _ins_rows(session, """
+        SELECT page_name, COUNT(*) AS events
+        FROM analytics.user_events
+        WHERE page_name IS NOT NULL
+        GROUP BY page_name ORDER BY events DESC LIMIT :limit
+    """, {"limit": limit})
+
+
+async def ins_events_per_day(session: AsyncSession, days: int = 30) -> list[dict]:
+    return await _ins_rows(session, """
+        SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day, COUNT(*) AS events
+        FROM analytics.user_events
+        WHERE created_at >= now() - (:days * interval '1 day')
+        GROUP BY 1 ORDER BY 1
+    """, {"days": days})
