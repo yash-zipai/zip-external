@@ -248,3 +248,46 @@ async def ins_events_per_day(session: AsyncSession, days: int = 30) -> list[dict
         WHERE created_at >= now() - (:days * interval '1 day')
         GROUP BY 1 ORDER BY 1
     """, {"days": days})
+
+
+async def ins_trending_zipcodes(session: AsyncSession, days: int = 7, limit: int = 10) -> list[dict]:
+    """
+    Compare searches per zipcode in the last `days` vs the `days` before that,
+    ranked by current demand, with a week-over-week trend.
+    """
+    sql = text("""
+        WITH cur AS (
+            SELECT zipcode,
+                   COUNT(*) AS current_searches,
+                   COUNT(DISTINCT COALESCE(user_id, session_id)) AS users
+            FROM analytics.user_events
+            WHERE zipcode IS NOT NULL AND zipcode <> ''
+              AND created_at >= now() - (:days * interval '1 day')
+            GROUP BY zipcode
+        ),
+        prev AS (
+            SELECT zipcode, COUNT(*) AS previous_searches
+            FROM analytics.user_events
+            WHERE zipcode IS NOT NULL AND zipcode <> ''
+              AND created_at >= now() - (2 * :days * interval '1 day')
+              AND created_at <  now() - (:days * interval '1 day')
+            GROUP BY zipcode
+        )
+        SELECT c.zipcode,
+               c.current_searches,
+               COALESCE(p.previous_searches, 0) AS previous_searches,
+               c.users,
+               CASE WHEN COALESCE(p.previous_searches, 0) = 0 THEN NULL
+                    ELSE ROUND(((c.current_searches - p.previous_searches)::numeric
+                                 / p.previous_searches) * 100, 1) END AS change_pct,
+               CASE WHEN COALESCE(p.previous_searches, 0) = 0 THEN 'new'
+                    WHEN c.current_searches > p.previous_searches THEN 'up'
+                    WHEN c.current_searches < p.previous_searches THEN 'down'
+                    ELSE 'flat' END AS trend
+        FROM cur c
+        LEFT JOIN prev p ON p.zipcode = c.zipcode
+        ORDER BY c.current_searches DESC
+        LIMIT :limit
+    """)
+    res = await session.execute(sql, {"days": days, "limit": limit})
+    return [dict(r._mapping) for r in res.fetchall()]

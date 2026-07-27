@@ -220,3 +220,22 @@ class InsightsOverviewResponse(BaseModel):
     top_zipcodes: list[ZipcodeStat] = Field(default_factory=list)
     index_usage: IndexUsage = Field(default_factory=IndexUsage)
     content: ContentEngagement = Field(default_factory=ContentEngagement)
+
+# ============================================================================
+# Trending Zipcodes — demand trend (this period vs previous period)
+# Response for: GET /v1/analytics/trending-zipcodes
+# ============================================================================
+
+class TrendingZipcode(BaseModel):
+    zipcode: str
+    current_searches: int = Field(0, description="Searches in the current window.")
+    previous_searches: int = Field(0, description="Searches in the previous window.")
+    users: int = Field(0, description="Distinct users searching this zipcode now.")
+    change_pct: float | None = Field(None, description="% change vs previous window (null if new).")
+    trend: str = Field("flat", description="up | down | flat | new")
+
+
+class TrendingZipcodesResponse(BaseModel):
+    """Response for GET /v1/analytics/trending-zipcodes."""
+    period_days: int = Field(7, description="Length of each comparison window, in days.")
+    items: list[TrendingZipcode] = Field(default_factory=list)

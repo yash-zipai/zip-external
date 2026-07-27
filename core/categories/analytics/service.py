@@ -37,6 +37,8 @@ from core.categories.analytics.schemas import (
     PageStat,
     DayCount,
     ContentEngagement,
+    TrendingZipcode,
+    TrendingZipcodesResponse,
 )
 logger = logging.getLogger("analytics.insights")
 
@@ -189,3 +191,34 @@ class AnalyticsService:
             index_usage=index_usage,
             content=content,
         )
+
+    # ======================================================================
+    # Trending Zipcodes — demand trend (current window vs previous window)
+    # ======================================================================
+
+    @staticmethod
+    async def get_trending_zipcodes(
+        session: AsyncSession,
+        days: int = 7,
+        limit: int = 10,
+    ) -> TrendingZipcodesResponse:
+        """
+        Ranked list of the most-searched zipcodes right now, each with its
+        week-over-week (or `days`-over-`days`) demand trend.
+        """
+        rows = await repo.ins_trending_zipcodes(session, days=days, limit=limit)
+
+        items = [
+            TrendingZipcode(
+                zipcode=str(r["zipcode"]),
+                current_searches=int(r["current_searches"] or 0),
+                previous_searches=int(r["previous_searches"] or 0),
+                users=int(r["users"] or 0),
+                change_pct=(float(r["change_pct"]) if r["change_pct"] is not None else None),
+                trend=str(r["trend"]),
+            )
+            for r in rows
+        ]
+
+        return TrendingZipcodesResponse(period_days=days, items=items)
+

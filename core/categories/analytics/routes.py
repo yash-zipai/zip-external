@@ -13,6 +13,8 @@ Available Endpoints:
 
     GET /v1/analytics/usage
 
+    GET /v1/analytics/trending-zipcodes
+
 Save as:
 core/analytics/routes.py
 """
@@ -27,6 +29,7 @@ from .schemas import (
     HouseViewResponse,
     ZipAIUsageResponse,
     InsightsOverviewResponse,
+    TrendingZipcodesResponse
 )
 
 from .service import AnalyticsService
@@ -124,5 +127,32 @@ async def get_analytics_overview(
 ):
 
     result = await AnalyticsService.get_insights_overview(session=db)
+
+    return result
+
+
+# ============================================================================
+# API 4
+# Trending zipcodes — where demand is moving (client-facing highlight)
+# ============================================================================
+
+@router.get(
+    "/v1/analytics/trending-zipcodes",
+    response_model=TrendingZipcodesResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Trending Zipcodes",
+    description="Top searched zipcodes with a period-over-period demand trend (up/down/new).",
+)
+async def get_trending_zipcodes(
+    days: int = 7,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_schema_session("analytics")),
+):
+
+    result = await AnalyticsService.get_trending_zipcodes(
+        session=db,
+        days=days,
+        limit=limit,
+    )
 
     return result
