@@ -13,7 +13,7 @@ core/analytics/service.py
 """
 
 from __future__ import annotations
-
+import logging
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
