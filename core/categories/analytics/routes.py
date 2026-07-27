@@ -26,6 +26,7 @@ from .schemas import (
     AnalyticsEventRequest,
     HouseViewResponse,
     ZipAIUsageResponse,
+    InsightsOverviewResponse,
 )
 
 from .service import AnalyticsService
@@ -103,5 +104,25 @@ async def get_zipai_usage(
 ):
 
     result = await AnalyticsService.get_zipai_usage(session=db)
+
+    return result
+
+# ============================================================================
+# API 3
+# Admin insights overview (user behaviour + engagement)
+# ============================================================================
+
+@router.get(
+    "/v1/analytics/overview",
+    response_model=InsightsOverviewResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Admin Insights Overview",
+    description="User behaviour + engagement metrics for the admin dashboard.",
+)
+async def get_analytics_overview(
+    db: AsyncSession = Depends(get_schema_session("analytics")),
+):
+
+    result = await AnalyticsService.get_insights_overview(session=db)
 
     return result
