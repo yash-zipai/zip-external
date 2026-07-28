@@ -231,7 +231,7 @@ async def get_session_quality(
 # ============================================================================
 
 @router.get(
-    "/v1/analytics/search-to-view-conversion",
+    "/v1/analytics/search-to-house-view-rate",
     response_model=SearchToViewConversionResponse,
     status_code=status.HTTP_200_OK,
     summary="Search-to-View Conversion",
