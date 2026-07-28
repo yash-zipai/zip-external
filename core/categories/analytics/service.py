@@ -39,6 +39,12 @@ from core.categories.analytics.schemas import (
     ContentEngagement,
     TrendingZipcode,
     TrendingZipcodesResponse,
+    HeatmapCell,
+    ActivityHeatmapResponse,
+    FunnelStep,
+    UserJourneyFunnelResponse,
+    SessionQualityResponse,
+    SearchToViewConversionResponse,
 )
 logger = logging.getLogger("analytics.insights")
 
@@ -221,4 +227,101 @@ class AnalyticsService:
         ]
 
         return TrendingZipcodesResponse(period_days=days, items=items)
+
+        # ======================================================================
+    # API 5 — Peak usage hours (activity heatmap: day-of-week x hour)
+    # ======================================================================
+
+    @staticmethod
+    async def get_activity_heatmap(
+        session: AsyncSession,
+        days: int = 30,
+    ) -> ActivityHeatmapResponse:
+        day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        rows = await repo.ins_activity_heatmap(session, days=days)
+        cells = [
+            HeatmapCell(
+                dow=int(r["dow"]),
+                day_name=day_names[int(r["dow"])],
+                hour=int(r["hour"]),
+                events=int(r["events"]),
+            )
+            for r in rows
+        ]
+        busiest = max(cells, key=lambda c: c.events) if cells else None
+        return ActivityHeatmapResponse(days=days, cells=cells, busiest=busiest)
+
+    # ======================================================================
+    # API 6 — User journey funnel (searched -> viewed house -> viewed index)
+    # ======================================================================
+
+    @staticmethod
+    async def get_user_journey_funnel(
+        session: AsyncSession,
+        days: int = 30,
+    ) -> UserJourneyFunnelResponse:
+        d = await repo.ins_user_journey_funnel(session, days=days)
+        searched = int(d.get("searched", 0) or 0)
+        viewed_house = int(d.get("viewed_house", 0) or 0)
+        viewed_index = int(d.get("viewed_index", 0) or 0)
+
+        def pct_of_top(n: int) -> float:
+            return round(100.0 * n / searched, 1) if searched else 0.0
+
+        steps = [
+            FunnelStep(
+                step="searched_zipcode", label="Searched a zipcode",
+                users=searched, pct_of_top=pct_of_top(searched), drop_from_prev_pct=0.0,
+            ),
+            FunnelStep(
+                step="viewed_house", label="Viewed a house",
+                users=viewed_house, pct_of_top=pct_of_top(viewed_house),
+                drop_from_prev_pct=(round(100.0 * (searched - viewed_house) / searched, 1) if searched else 0.0),
+            ),
+            FunnelStep(
+                step="viewed_index", label="Viewed an index",
+                users=viewed_index, pct_of_top=pct_of_top(viewed_index),
+                drop_from_prev_pct=(round(100.0 * (viewed_house - viewed_index) / viewed_house, 1) if viewed_house else 0.0),
+            ),
+        ]
+        return UserJourneyFunnelResponse(days=days, steps=steps)
+
+    # ======================================================================
+    # API 7 — Session quality (depth of a visit)
+    # ======================================================================
+
+    @staticmethod
+    async def get_session_quality(
+        session: AsyncSession,
+        days: int = 30,
+    ) -> SessionQualityResponse:
+        d = await repo.ins_session_quality(session, days=days)
+        secs = float(d.get("avg_session_seconds", 0) or 0)
+        return SessionQualityResponse(
+            days=days,
+            total_sessions=int(d.get("total_sessions", 0) or 0),
+            avg_events_per_session=float(d.get("avg_events_per_session", 0) or 0),
+            avg_session_seconds=secs,
+            avg_session_minutes=round(secs / 60.0, 1),
+            bounce_rate_pct=float(d.get("bounce_rate_pct", 0) or 0),
+        )
+
+    # ======================================================================
+    # API 8 — Search-to-view conversion
+    # ======================================================================
+
+    @staticmethod
+    async def get_search_to_view_conversion(
+        session: AsyncSession,
+        days: int = 30,
+    ) -> SearchToViewConversionResponse:
+        d = await repo.ins_search_to_view_conversion(session, days=days)
+        searchers = int(d.get("searchers", 0) or 0)
+        converters = int(d.get("converters", 0) or 0)
+        rate = round(100.0 * converters / searchers, 1) if searchers else 0.0
+        return SearchToViewConversionResponse(
+            days=days, searchers=searchers, converters=converters, conversion_rate_pct=rate,
+        )
+
+
 

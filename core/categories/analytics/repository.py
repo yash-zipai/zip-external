@@ -291,3 +291,90 @@ async def ins_trending_zipcodes(session: AsyncSession, days: int = 7, limit: int
     """)
     res = await session.execute(sql, {"days": days, "limit": limit})
     return [dict(r._mapping) for r in res.fetchall()]
+
+
+# ===========================================================
+# API 5 — Peak usage hours (activity heatmap)
+# ===========================================================
+
+async def ins_activity_heatmap(session: AsyncSession, days: int = 30) -> list[dict]:
+    return await _ins_rows(session, """
+        SELECT EXTRACT(DOW  FROM created_at)::int AS dow,
+               EXTRACT(HOUR FROM created_at)::int AS hour,
+               COUNT(*) AS events
+        FROM analytics.user_events
+        WHERE created_at >= now() - (:days * interval '1 day')
+        GROUP BY 1, 2
+        ORDER BY 1, 2
+    """, {"days": days})
+
+
+# ===========================================================
+# API 6 — User journey funnel (search -> house -> index)
+# ===========================================================
+
+async def ins_user_journey_funnel(session: AsyncSession, days: int = 30) -> dict:
+    row = (await session.execute(text("""
+        WITH per_user AS (
+            SELECT COALESCE(user_id, session_id) AS person,
+                   bool_or(zipcode IS NOT NULL AND zipcode <> '') AS searched,
+                   bool_or(event_type = 'house_view')            AS viewed_house,
+                   bool_or(category = ANY(:cats))                AS viewed_index
+            FROM analytics.user_events
+            WHERE created_at >= now() - (:days * interval '1 day')
+            GROUP BY 1
+        )
+        SELECT
+            COUNT(*) FILTER (WHERE searched)                                        AS searched,
+            COUNT(*) FILTER (WHERE searched AND viewed_house)                       AS viewed_house,
+            COUNT(*) FILTER (WHERE searched AND viewed_house AND viewed_index)      AS viewed_index
+        FROM per_user
+    """), {"days": days, "cats": INDEX_CATEGORIES})).fetchone()
+    return dict(row._mapping) if row else {}
+
+
+# ===========================================================
+# API 7 — Session quality (depth of a visit)
+# ===========================================================
+
+async def ins_session_quality(session: AsyncSession, days: int = 30) -> dict:
+    row = (await session.execute(text("""
+        WITH s AS (
+            SELECT session_id,
+                   COUNT(*) AS events,
+                   EXTRACT(EPOCH FROM (MAX(created_at) - MIN(created_at))) AS duration_secs
+            FROM analytics.user_events
+            WHERE session_id IS NOT NULL
+              AND created_at >= now() - (:days * interval '1 day')
+            GROUP BY session_id
+        )
+        SELECT
+            COUNT(*) AS total_sessions,
+            COALESCE(ROUND(AVG(events), 2), 0) AS avg_events_per_session,
+            COALESCE(ROUND(AVG(duration_secs)::numeric, 1), 0) AS avg_session_seconds,
+            COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE events = 1) / NULLIF(COUNT(*), 0), 1), 0) AS bounce_rate_pct
+        FROM s
+    """), {"days": days})).fetchone()
+    return dict(row._mapping) if row else {}
+
+
+# ===========================================================
+# API 8 — Search-to-view conversion
+# ===========================================================
+
+async def ins_search_to_view_conversion(session: AsyncSession, days: int = 30) -> dict:
+    row = (await session.execute(text("""
+        WITH per_user AS (
+            SELECT COALESCE(user_id, session_id) AS person,
+                   bool_or(zipcode IS NOT NULL AND zipcode <> '') AS searched,
+                   bool_or(event_type = 'house_view')            AS viewed
+            FROM analytics.user_events
+            WHERE created_at >= now() - (:days * interval '1 day')
+            GROUP BY 1
+        )
+        SELECT
+            COUNT(*) FILTER (WHERE searched)             AS searchers,
+            COUNT(*) FILTER (WHERE searched AND viewed)  AS converters
+        FROM per_user
+    """), {"days": days})).fetchone()
+    return dict(row._mapping) if row else {}

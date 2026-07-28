@@ -239,3 +239,61 @@ class TrendingZipcodesResponse(BaseModel):
     """Response for GET /v1/analytics/trending-zipcodes."""
     period_days: int = Field(7, description="Length of each comparison window, in days.")
     items: list[TrendingZipcode] = Field(default_factory=list)
+
+
+# ============================================================================
+# Peak Usage Hours (activity heatmap)  ->  GET /v1/analytics/activity-heatmap
+# ============================================================================
+
+class HeatmapCell(BaseModel):
+    dow: int = Field(..., description="Day of week: 0=Sunday ... 6=Saturday.")
+    day_name: str
+    hour: int = Field(..., description="Hour of day, 0-23.")
+    events: int = 0
+
+
+class ActivityHeatmapResponse(BaseModel):
+    days: int = 30
+    cells: list[HeatmapCell] = Field(default_factory=list)
+    busiest: HeatmapCell | None = None
+
+
+# ============================================================================
+# User Journey Funnel  ->  GET /v1/analytics/user-journey-funnel
+# ============================================================================
+
+class FunnelStep(BaseModel):
+    step: str
+    label: str
+    users: int = 0
+    pct_of_top: float = 0.0
+    drop_from_prev_pct: float = 0.0
+
+
+class UserJourneyFunnelResponse(BaseModel):
+    days: int = 30
+    steps: list[FunnelStep] = Field(default_factory=list)
+
+
+# ============================================================================
+# Session Quality  ->  GET /v1/analytics/session-quality
+# ============================================================================
+
+class SessionQualityResponse(BaseModel):
+    days: int = 30
+    total_sessions: int = 0
+    avg_events_per_session: float = 0.0
+    avg_session_seconds: float = 0.0
+    avg_session_minutes: float = 0.0
+    bounce_rate_pct: float = 0.0
+
+
+# ============================================================================
+# Search-to-View Conversion  ->  GET /v1/analytics/search-to-view-conversion
+# ============================================================================
+
+class SearchToViewConversionResponse(BaseModel):
+    days: int = 30
+    searchers: int = 0
+    converters: int = 0
+    conversion_rate_pct: float = 0.0
