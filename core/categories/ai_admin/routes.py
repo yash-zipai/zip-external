@@ -28,7 +28,7 @@ from .schemas import (
     TopUnansweredResponse,
 )
 
-router = APIRouter(prefix="/v1/ai-admin", tags=["AI Admin"])
+router = APIRouter(prefix="ai-admin", tags=["AI Admin"])
 
 
 @router.get(
