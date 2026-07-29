@@ -113,7 +113,7 @@ async def get_house_views(
 # ============================================================================
 
 @router.get(
-    "/v1/analytics/usage",
+    "/analytics/usage",
     response_model=ZipAIUsageResponse,
 )
 async def get_zipai_usage(
@@ -130,7 +130,7 @@ async def get_zipai_usage(
 # ============================================================================
 
 @router.get(
-    "/v1/analytics/overview",
+    "/analytics/overview",
     response_model=InsightsOverviewResponse,
     status_code=status.HTTP_200_OK,
     summary="Admin Insights Overview",
@@ -151,7 +151,7 @@ async def get_analytics_overview(
 # ============================================================================
 
 @router.get(
-    "/v1/analytics/trending-zipcodes",
+    "/analytics/trending-zipcodes",
     response_model=TrendingZipcodesResponse,
     status_code=status.HTTP_200_OK,
     summary="Trending Zipcodes",
@@ -177,7 +177,7 @@ async def get_trending_zipcodes(
 # ============================================================================
 
 @router.get(
-    "/v1/analytics/activity-heatmap",
+    "/analytics/activity-heatmap",
     response_model=ActivityHeatmapResponse,
     status_code=status.HTTP_200_OK,
     summary="Peak Usage Hours (activity heatmap)",
@@ -195,7 +195,7 @@ async def get_activity_heatmap(
 # ============================================================================
 
 @router.get(
-    "/v1/analytics/user-journey-funnel",
+    "/analytics/user-journey-funnel",
     response_model=UserJourneyFunnelResponse,
     status_code=status.HTTP_200_OK,
     summary="User Journey Funnel",
@@ -213,7 +213,7 @@ async def get_user_journey_funnel(
 # ============================================================================
 
 @router.get(
-    "/v1/analytics/session-quality",
+    "/analytics/session-quality",
     response_model=SessionQualityResponse,
     status_code=status.HTTP_200_OK,
     summary="Session Quality",
@@ -231,7 +231,7 @@ async def get_session_quality(
 # ============================================================================
 
 @router.get(
-    "/v1/analytics/search-to-house-view-rate",
+    "/analytics/search-to-house-view-rate",
     response_model=SearchToViewConversionResponse,
     status_code=status.HTTP_200_OK,
     summary="Search-to-View Conversion",
