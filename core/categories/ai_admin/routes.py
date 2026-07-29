@@ -16,10 +16,11 @@ Endpoints (grouped under "AI Admin" in Swagger), all under /v1/ai-admin:
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from .service import AiAdminService
 
-from app.db.session import get_db_session
-from app.ai_admin.service import AiAdminService
-from app.ai_admin.schemas import (
+from core.schema_manager import get_schema_session
+
+from .schemas import (
     AiAdminOverviewResponse,
     IntentDistributionResponse,
     QuestionsOverTimeResponse,
@@ -27,7 +28,7 @@ from app.ai_admin.schemas import (
     TopUnansweredResponse,
 )
 
-router = APIRouter(prefix="/ai-admin", tags=["AI Admin"])
+router = APIRouter(prefix="/v1/ai-admin", tags=["AI Admin"])
 
 
 @router.get(
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/ai-admin", tags=["AI Admin"])
 )
 async def get_overview(
     days: int = 30,
-    db: AsyncSession = Depends(get_db_session),
+    db: AsyncSession = Depends(get_schema_session("rag")),
 ):
     return await AiAdminService.get_overview(db, days=days)
 
@@ -54,7 +55,7 @@ async def get_overview(
 async def get_top_questions(
     days: int = 30,
     limit: int = 20,
-    db: AsyncSession = Depends(get_db_session),
+    db: AsyncSession = Depends(get_schema_session("rag")),
 ):
     return await AiAdminService.get_top_questions(db, days=days, limit=limit)
 
@@ -68,7 +69,7 @@ async def get_top_questions(
 )
 async def get_intent_distribution(
     days: int = 30,
-    db: AsyncSession = Depends(get_db_session),
+    db: AsyncSession = Depends(get_schema_session("rag")),
 ):
     return await AiAdminService.get_intent_distribution(db, days=days)
 
@@ -82,7 +83,7 @@ async def get_intent_distribution(
 )
 async def get_questions_over_time(
     days: int = 30,
-    db: AsyncSession = Depends(get_db_session),
+    db: AsyncSession = Depends(get_schema_session("rag")),
 ):
     return await AiAdminService.get_questions_over_time(db, days=days)
 
@@ -97,6 +98,6 @@ async def get_questions_over_time(
 async def get_top_unanswered(
     days: int = 30,
     limit: int = 20,
-    db: AsyncSession = Depends(get_db_session),
+    db: AsyncSession = Depends(get_schema_session("rag")),
 ):
     return await AiAdminService.get_top_unanswered(db, days=days, limit=limit)
