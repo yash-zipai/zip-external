@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai_admin import repository as repo
-from app.ai_admin.schemas import (
+from core.categories.ai_admin import repository as repo
+from core.categories.ai_admin.schemas import (
     AiAdminOverviewResponse,
     IntentDistributionResponse,
     IntentStat,
@@ -19,10 +19,19 @@ from app.ai_admin.schemas import (
     UnansweredQuestion,
 )
 
+from core.cache import (
+    cached,
+    ai_overview_cache,
+    ai_top_questions_cache,
+    ai_intent_cache,
+    ai_over_time_cache,
+    ai_top_unanswered_cache,
+)
 
 class AiAdminService:
 
     @staticmethod
+    @cached(ai_overview_cache)
     async def get_overview(session: AsyncSession, days: int = 30) -> AiAdminOverviewResponse:
         d = await repo.overview(session, days)
         total = int(d.get("total_questions", 0) or 0)
@@ -44,6 +53,7 @@ class AiAdminService:
         )
 
     @staticmethod
+    @cached(ai_top_questions_cache)
     async def get_top_questions(session: AsyncSession, days: int = 30, limit: int = 20) -> TopQuestionsResponse:
         rows = await repo.top_questions(session, days, limit)
         items = [
@@ -59,6 +69,7 @@ class AiAdminService:
         return TopQuestionsResponse(days=days, items=items)
 
     @staticmethod
+    @cached(ai_intent_cache)
     async def get_intent_distribution(session: AsyncSession, days: int = 30) -> IntentDistributionResponse:
         rows = await repo.intent_distribution(session, days)
         items = [
@@ -73,6 +84,7 @@ class AiAdminService:
         return IntentDistributionResponse(days=days, items=items)
 
     @staticmethod
+    @cached(ai_over_time_cache)
     async def get_questions_over_time(session: AsyncSession, days: int = 30) -> QuestionsOverTimeResponse:
         rows = await repo.questions_over_time(session, days)
         items = [
@@ -86,6 +98,7 @@ class AiAdminService:
         return QuestionsOverTimeResponse(days=days, items=items)
 
     @staticmethod
+    @cached(ai_top_unanswered_cache)
     async def get_top_unanswered(session: AsyncSession, days: int = 30, limit: int = 20) -> TopUnansweredResponse:
         rows = await repo.top_unanswered(session, days, limit)
         items = [
