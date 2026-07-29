@@ -23,6 +23,19 @@ from core.categories.analytics.repository import (
     get_house_views as repo_get_house_views,
     get_zipai_usage as repo_get_zipai_usage,
 )
+
+from core.cache import (
+    cached,
+    analytics_house_views_cache,
+    analytics_usage_cache,
+    analytics_overview_cache,
+    analytics_trending_cache,
+    analytics_heatmap_cache,
+    analytics_funnel_cache,
+    analytics_session_cache,
+    analytics_conversion_cache,
+)
+
 from core.categories.analytics import repository as repo
 from core.categories.analytics.schemas import (
     AnalyticsEventRequest,
@@ -73,6 +86,7 @@ class AnalyticsService:
     # ======================================================================
 
     @staticmethod
+    @cached(analytics_house_views_cache)
     async def get_house_views(
         session: AsyncSession,
         house_id: str,
@@ -100,6 +114,7 @@ class AnalyticsService:
     # ======================================================================
 
     @staticmethod
+    @cached(analytics_usage_cache)
     async def get_zipai_usage(
         session: AsyncSession,
     ) -> ZipAIUsageResponse:
@@ -129,6 +144,7 @@ class AnalyticsService:
     # ======================================================================
 
     @staticmethod
+    @cached(analytics_overview_cache) 
     async def get_insights_overview(
         session: AsyncSession,
     ) -> InsightsOverviewResponse:
@@ -203,6 +219,7 @@ class AnalyticsService:
     # ======================================================================
 
     @staticmethod
+    @cached(analytics_trending_cache)
     async def get_trending_zipcodes(
         session: AsyncSession,
         days: int = 7,
@@ -233,6 +250,7 @@ class AnalyticsService:
     # ======================================================================
 
     @staticmethod
+    @cached(analytics_heatmap_cache)
     async def get_activity_heatmap(
         session: AsyncSession,
         days: int = 30,
@@ -256,6 +274,7 @@ class AnalyticsService:
     # ======================================================================
 
     @staticmethod
+    @cached(analytics_funnel_cache)
     async def get_user_journey_funnel(
         session: AsyncSession,
         days: int = 30,
@@ -291,6 +310,7 @@ class AnalyticsService:
     # ======================================================================
 
     @staticmethod
+    @cached(analytics_session_cache)
     async def get_session_quality(
         session: AsyncSession,
         days: int = 30,
@@ -311,6 +331,7 @@ class AnalyticsService:
     # ======================================================================
 
     @staticmethod
+    @cached(analytics_conversion_cache)
     async def get_search_to_view_conversion(
         session: AsyncSession,
         days: int = 30,
