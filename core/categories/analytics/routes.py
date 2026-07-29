@@ -82,7 +82,7 @@ async def receive_vector_event(
 # ============================================================================
 
 @router.get(
-    "/v1/analytics/house/{house_id}/views",
+    "/analytics/house/{house_id}/views",
     response_model=HouseViewResponse,
     status_code=status.HTTP_200_OK,
     summary="House View Analytics",
