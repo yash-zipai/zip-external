@@ -78,6 +78,14 @@ ai_intent_cache         = TTLCache(maxsize=8,  ttl=120)
 ai_over_time_cache      = TTLCache(maxsize=16, ttl=120)
 ai_top_unanswered_cache = TTLCache(maxsize=32, ttl=120)
 
+#data_audit
+audit_ingestion_cache    = TTLCache(maxsize=16, ttl=300)
+audit_freshness_cache    = TTLCache(maxsize=8,  ttl=300)
+audit_counts_cache       = TTLCache(maxsize=8,  ttl=300)
+audit_coverage_cache     = TTLCache(maxsize=8,  ttl=300)
+audit_coverage_gaps_cache = TTLCache(maxsize=32, ttl=300)
+audit_quality_cache      = TTLCache(maxsize=8,  ttl=300)
+
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
     """
     Build a deterministic, hashable cache key from arbitrary arguments.
