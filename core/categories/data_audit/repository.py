@@ -28,13 +28,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # The six category coverage subqueries — each returns DISTINCT zipcodes we hold
 # data for in that category. Constant strings, safe to interpolate.
+# zipcode is CAST to text everywhere so the UNION across tables (whose zipcode
+# columns may be int / varchar / text) and the join against
+# analytics.user_events.zipcode (TEXT) never hit a type mismatch.
 COVERAGE_SUBQUERIES: dict[str, str] = {
-    "cost_of_living": "SELECT DISTINCT zipcode FROM cost_of_living.col_snapshot",
-    "crime":          "SELECT DISTINCT zipcode FROM crime.crime_history WHERE current_flag = 'Y'",
-    "employer":       "SELECT DISTINCT zipcode FROM employer.zip_snapshots",
-    "healthcare":     "SELECT DISTINCT zipcode FROM healthcare.healthcare_provider",
-    "lifestyle":      "SELECT DISTINCT zipcode FROM lifestyle.lifestyle_place",
-    "schools":        "SELECT DISTINCT zipcode FROM schools.schools_details",
+    "cost_of_living": "SELECT DISTINCT zipcode::text AS zipcode FROM cost_of_living.col_snapshot",
+    "crime":          "SELECT DISTINCT zipcode::text AS zipcode FROM crime.crime_history WHERE current_flag = 'Y'",
+    "employer":       "SELECT DISTINCT zipcode::text AS zipcode FROM employer.zip_snapshots",
+    "healthcare":     "SELECT DISTINCT zipcode::text AS zipcode FROM healthcare.healthcare_provider",
+    "lifestyle":      "SELECT DISTINCT zipcode::text AS zipcode FROM lifestyle.lifestyle_place",
+    "schools":        "SELECT DISTINCT zipcode::text AS zipcode FROM schools.schools_details",
 }
 
 # (category, zipcode) pairs we hold — used to make coverage-gaps category-aware
@@ -176,18 +179,21 @@ async def coverage_gaps(
             FROM ( {COVERAGE_PAIRS_UNION} ) all_cov
         )
         SELECT ue.category,
-               ue.zipcode,
+               ue.zipcode::text                                    AS zipcode,
                COUNT(*)                                             AS searches,
                COUNT(DISTINCT COALESCE(ue.user_id, ue.session_id)) AS users
         FROM analytics.user_events ue
         LEFT JOIN coverage cov
                ON cov.category = ue.category
-              AND cov.zipcode  = ue.zipcode
-        WHERE ue.zipcode IS NOT NULL AND ue.zipcode <> ''
+              AND cov.zipcode  = ue.zipcode::text
+        WHERE ue.zipcode IS NOT NULL AND ue.zipcode::text <> ''
           AND ue.category IS NOT NULL
           AND ue.category IN ('cost_of_living','crime','employer','healthcare','lifestyle','schools')
           AND cov.zipcode IS NULL
-          AND (:category IS NULL OR ue.category = :category)
+          AND ue.created_at >= now() - (:days * interval '1 day')
+          -- CAST is required: a bare ":category IS NULL" sends an untyped NULL and
+          -- asyncpg/Postgres raises "could not determine data type of parameter".
+          AND (CAST(:category AS text) IS NULL OR ue.category = CAST(:category AS text))
         GROUP BY ue.category, ue.zipcode
         ORDER BY searches DESC
         LIMIT :limit
@@ -195,34 +201,43 @@ async def coverage_gaps(
     return await _rows(session, sql, {"days": days, "limit": limit, "category": category})
 
 
-# ── 6) Data quality — completeness + duplicates ───────────────────────────────
-async def crime_completeness(session: AsyncSession) -> dict:
-    return await _one(session, """
-        SELECT COUNT(*) AS total,
+# ── 6) Data quality — one completeness row PER category ───────────────────────
+# Instead of two near-identical healthcare blocks, every category gets exactly
+# one row: how many rows are missing the key field we check for it.
+#   crime      -> rate      (domain field)
+#   healthcare -> rating    (domain field)
+#   others     -> zipcode   (the field a zip product can't work without)
+# zipcode is cast to text so the "empty" check is type-safe on any column type.
+def _zip_missing(schema_table: str, extra_where: str = "") -> str:
+    where = f"WHERE {extra_where}" if extra_where else ""
+    return f"""
+        SELECT '{schema_table.split('.')[0]}' AS category, 'zipcode' AS field_checked,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE zipcode IS NULL OR btrim(zipcode::text) = '') AS missing,
+               COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE zipcode IS NULL OR btrim(zipcode::text) = '')
+                              / NULLIF(COUNT(*), 0), 1), 0) AS missing_pct
+        FROM {schema_table} {where}
+    """
+
+
+async def completeness(session: AsyncSession) -> list[dict]:
+    return await _rows(session, f"""
+        SELECT 'crime' AS category, 'rate' AS field_checked,
+               COUNT(*) AS total,
                COUNT(*) FILTER (WHERE rate IS NULL) AS missing,
                COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE rate IS NULL)
                               / NULLIF(COUNT(*), 0), 1), 0) AS missing_pct
-        FROM crime.crime_history
-        WHERE current_flag = 'Y'
-    """)
-
-
-async def healthcare_completeness(session: AsyncSession) -> dict:
-    return await _one(session, """
-        SELECT COUNT(*) AS total,
-               COUNT(*) FILTER (WHERE rating IS NULL) AS missing,
+        FROM crime.crime_history WHERE current_flag = 'Y'
+        UNION ALL
+        SELECT 'healthcare', 'rating',
+               COUNT(*),
+               COUNT(*) FILTER (WHERE rating IS NULL),
                COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE rating IS NULL)
-                              / NULLIF(COUNT(*), 0), 1), 0) AS missing_pct
+                              / NULLIF(COUNT(*), 0), 1), 0)
         FROM healthcare.healthcare_provider
+        UNION ALL {_zip_missing('cost_of_living.col_snapshot')}
+        UNION ALL {_zip_missing('employer.zip_snapshots')}
+        UNION ALL {_zip_missing('lifestyle.lifestyle_place')}
+        UNION ALL {_zip_missing('schools.schools_details')}
+        ORDER BY missing_pct DESC
     """)
-
-
-async def healthcare_duplicates(session: AsyncSession, limit: int = 20) -> list[dict]:
-    return await _rows(session, """
-        SELECT zipcode, provider_name, COUNT(*) AS dupes
-        FROM healthcare.healthcare_provider
-        GROUP BY zipcode, provider_name
-        HAVING COUNT(*) > 1
-        ORDER BY dupes DESC
-        LIMIT :limit
-    """, {"limit": limit})
