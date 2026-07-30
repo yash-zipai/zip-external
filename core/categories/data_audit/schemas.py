@@ -73,19 +73,13 @@ class CoverageGapsResponse(BaseModel):
 
 
 # ── 6) Data quality ───────────────────────────────────────────────────────────
-class CompletenessStat(BaseModel):
+class CompletenessRow(BaseModel):
+    category: str
+    field_checked: str   # which field we measured (rate / rating / zipcode)
     total: int
     missing: int
     missing_pct: float
 
 
-class DuplicateRow(BaseModel):
-    zipcode: str
-    provider_name: str
-    dupes: int
-
-
 class DataQualityResponse(BaseModel):
-    crime_missing_rate: CompletenessStat
-    healthcare_missing_rating: CompletenessStat
-    healthcare_duplicates: List[DuplicateRow]
+    items: List[CompletenessRow]
