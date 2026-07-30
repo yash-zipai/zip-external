@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.categories.data_audit import repository as repo
-from core.cache import (
+from app.data_audit import repository as repo
+from app.data_audit.cache import (
     cached,
     audit_ingestion_cache,
     audit_freshness_cache,
@@ -19,14 +19,13 @@ from core.cache import (
     audit_coverage_gaps_cache,
     audit_quality_cache,
 )
-from core.categories.data_audit.schemas import (
-    CompletenessStat,
+from app.data_audit.schemas import (
+    CompletenessRow,
     CoverageGapRow,
     CoverageGapsResponse,
     CoverageResponse,
     CoverageRow,
     DataQualityResponse,
-    DuplicateRow,
     FreshnessResponse,
     FreshnessRow,
     IngestionActivityResponse,
@@ -114,27 +113,15 @@ class DataAuditService:
     @staticmethod
     @cached(audit_quality_cache)
     async def get_data_quality(session: AsyncSession) -> DataQualityResponse:
-        crime = await repo.crime_completeness(session)
-        health = await repo.healthcare_completeness(session)
-        dupes = await repo.healthcare_duplicates(session)
-
-        return DataQualityResponse(
-            crime_missing_rate=CompletenessStat(
-                total=int(crime.get("total", 0) or 0),
-                missing=int(crime.get("missing", 0) or 0),
-                missing_pct=float(crime.get("missing_pct", 0) or 0),
-            ),
-            healthcare_missing_rating=CompletenessStat(
-                total=int(health.get("total", 0) or 0),
-                missing=int(health.get("missing", 0) or 0),
-                missing_pct=float(health.get("missing_pct", 0) or 0),
-            ),
-            healthcare_duplicates=[
-                DuplicateRow(
-                    zipcode=str(r["zipcode"]),
-                    provider_name=str(r["provider_name"]),
-                    dupes=int(r["dupes"] or 0),
-                )
-                for r in dupes
-            ],
-        )
+        rows = await repo.completeness(session)
+        items = [
+            CompletenessRow(
+                category=str(r["category"]),
+                field_checked=str(r["field_checked"]),
+                total=int(r["total"] or 0),
+                missing=int(r["missing"] or 0),
+                missing_pct=float(r["missing_pct"] or 0),
+            )
+            for r in rows
+        ]
+        return DataQualityResponse(items=items)
