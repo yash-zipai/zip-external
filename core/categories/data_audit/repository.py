@@ -235,8 +235,6 @@ async def completeness(session: AsyncSession) -> list[dict]:
                COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE rating IS NULL)
                               / NULLIF(COUNT(*), 0), 1), 0)
         FROM healthcare.healthcare_provider
-        UNION ALL {_zip_missing('cost_of_living.col_snapshot')}
-        UNION ALL {_zip_missing('employer.zip_snapshots')}
         UNION ALL {_zip_missing('lifestyle.lifestyle_place')}
         UNION ALL {_zip_missing('schools.schools_details')}
         ORDER BY missing_pct DESC
