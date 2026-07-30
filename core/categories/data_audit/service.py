@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.data_audit import repository as repo
-from app.data_audit.cache import (
+from core.categories.data_audit import repository as repo
+from core.cache import (
     cached,
     audit_ingestion_cache,
     audit_freshness_cache,
@@ -19,7 +19,7 @@ from app.data_audit.cache import (
     audit_coverage_gaps_cache,
     audit_quality_cache,
 )
-from app.data_audit.schemas import (
+from core.categories.data_audit.schemas import (
     CompletenessRow,
     CoverageGapRow,
     CoverageGapsResponse,
