@@ -78,13 +78,26 @@ services:
     volumes:
       - ./vector/vector.yml:/etc/vector/vector.yaml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+<<<<<<< HEAD
       - vector-data:/var/lib/vector
+=======
+      - vector-data:/var/lib/vector  # ← add (matches your data_dir)
+
+>>>>>>> 008a53a98f4cc8c789294c3faebf222740b2a970
     ports:
       - "8686:8686"
     environment:
       APP_ENV: ${APP_ENV:-production}
     command: ["--config", "/etc/vector/vector.yaml"]
 
+<<<<<<< HEAD
 # Top-level named volumes — must be at column 0, a sibling of `services:`
 volumes:
   vector-data:
+=======
+  volumes:                                      # ← add at the very bottom of the file
+    vector-data:
+
+
+ 
+>>>>>>> 008a53a98f4cc8c789294c3faebf222740b2a970

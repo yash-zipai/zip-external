@@ -27,7 +27,7 @@ from cachetools import TTLCache
 #healthcare
 top_places_cache: TTLCache = TTLCache(maxsize=256, ttl=900)    
 breakdown_cache: TTLCache = TTLCache(maxsize=256, ttl=900)     
-index_scores_cache: TTLCache = TTLCache(maxsize=64, ttl=1800)  
+index_scores_cache: TTLCache = TTLCache(maxsize=64, ttl=900)  
 map_pins_cache: TTLCache = TTLCache(maxsize=256, ttl=900)       
 
 #crime
@@ -61,8 +61,32 @@ jobs_score_cache     = TTLCache(maxsize=256, ttl=900)
 #audit
 audit_logs_cache = TTLCache(maxsize=256, ttl=900)
 
+#analytics (admin insights)
+analytics_house_views_cache = TTLCache(maxsize=256, ttl=900)
+analytics_usage_cache       = TTLCache(maxsize=16,   ttl=900)
+analytics_overview_cache    = TTLCache(maxsize=8,    ttl=300)
+analytics_trending_cache    = TTLCache(maxsize=64,   ttl=300)
+analytics_heatmap_cache     = TTLCache(maxsize=32,   ttl=600)
+analytics_funnel_cache      = TTLCache(maxsize=32,   ttl=300)
+analytics_session_cache     = TTLCache(maxsize=32,   ttl=300)
+analytics_conversion_cache  = TTLCache(maxsize=32,   ttl=300)
 
+#ai_admin
+ai_overview_cache       = TTLCache(maxsize=8,  ttl=120)
+ai_top_questions_cache  = TTLCache(maxsize=32, ttl=120)
+ai_intent_cache         = TTLCache(maxsize=8,  ttl=120)
+ai_over_time_cache      = TTLCache(maxsize=16, ttl=120)
+ai_top_unanswered_cache = TTLCache(maxsize=32, ttl=120)
 
+#data_audit
+audit_ingestion_cache    = TTLCache(maxsize=16, ttl=300)
+audit_freshness_cache    = TTLCache(maxsize=8,  ttl=300)
+audit_counts_cache       = TTLCache(maxsize=8,  ttl=300)
+audit_coverage_cache     = TTLCache(maxsize=8,  ttl=300)
+audit_coverage_gaps_cache = TTLCache(maxsize=32, ttl=300)
+audit_quality_cache      = TTLCache(maxsize=8,  ttl=300)
+audit_new_listings_cache         = TTLCache(maxsize=64, ttl=60)
+audit_new_listings_summary_cache = TTLCache(maxsize=16, ttl=60)
 
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
     """

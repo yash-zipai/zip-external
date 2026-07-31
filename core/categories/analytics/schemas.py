@@ -11,6 +11,8 @@ Endpoints:
 
     GET /v1/analytics/usage
 
+    GET /v1/analytics/overview
+
 Save as:
 core/analytics/schemas.py
 """
@@ -20,13 +22,14 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, ConfigDict
 
 # ============================================================================
 # Request Model (Vector -> FastAPI)
 # ============================================================================
 
 class AnalyticsEventRequest(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True) # new added 31/07/2026
     """
     Request body received from Vector.
     """
@@ -159,3 +162,139 @@ class AnalyticsEventResponse(BaseModel):
         ...,
         description="Operation status."
     )
+
+
+# ============================================================================
+# Admin Insights — Overview (user behaviour + engagement)
+# Response for: GET /v1/analytics/overview
+# ============================================================================
+
+class UserActivity(BaseModel):
+    total_users: int = Field(0, description="Distinct users with any tracked activity.")
+    active_users: int = Field(0, description="Users active within the window (default 30d).")
+    inactive_users: int = Field(0, description="Users seen before but not within the window.")
+    new_users: int = Field(0, description="Users whose first activity was within the window.")
+    returning_users: int = Field(0, description="Active users who are not brand new.")
+    dau: int = Field(0, description="Distinct users active in the last 1 day.")
+    wau: int = Field(0, description="Distinct users active in the last 7 days.")
+    mau: int = Field(0, description="Distinct users active in the last 30 days.")
+    active_window_days: int = Field(30, description="Window used for active/inactive.")
+
+
+class ZipcodeStat(BaseModel):
+    zipcode: str
+    users: int = Field(0, description="Distinct users who searched this zipcode.")
+    searches: int = Field(0, description="Total searches for this zipcode.")
+
+
+class IndexUsage(BaseModel):
+    total_users: int = Field(0, description="Distinct users across all index categories.")
+    by_category: dict[str, int] = Field(default_factory=dict)
+
+
+class ResourceStat(BaseModel):
+    resource_id: str
+    views: int = 0
+
+
+class PageStat(BaseModel):
+    page_name: str | None = None
+    events: int = 0
+
+
+class DayCount(BaseModel):
+    day: str
+    events: int = 0
+
+
+class ContentEngagement(BaseModel):
+    total_events: int = 0
+    total_sessions: int = 0
+    top_houses: list[ResourceStat] = Field(default_factory=list)
+    top_pages: list[PageStat] = Field(default_factory=list)
+    events_per_day: list[DayCount] = Field(default_factory=list)
+
+
+class InsightsOverviewResponse(BaseModel):
+    """Response for GET /v1/analytics/overview."""
+    users: UserActivity
+    top_zipcodes: list[ZipcodeStat] = Field(default_factory=list)
+    index_usage: IndexUsage = Field(default_factory=IndexUsage)
+    content: ContentEngagement = Field(default_factory=ContentEngagement)
+
+# ============================================================================
+# Trending Zipcodes — demand trend (this period vs previous period)
+# Response for: GET /v1/analytics/trending-zipcodes
+# ============================================================================
+
+class TrendingZipcode(BaseModel):
+    zipcode: str
+    current_searches: int = Field(0, description="Searches in the current window.")
+    previous_searches: int = Field(0, description="Searches in the previous window.")
+    users: int = Field(0, description="Distinct users searching this zipcode now.")
+    change_pct: float | None = Field(None, description="% change vs previous window (null if new).")
+    trend: str = Field("flat", description="up | down | flat | new")
+
+
+class TrendingZipcodesResponse(BaseModel):
+    """Response for GET /v1/analytics/trending-zipcodes."""
+    period_days: int = Field(7, description="Length of each comparison window, in days.")
+    items: list[TrendingZipcode] = Field(default_factory=list)
+
+
+# ============================================================================
+# Peak Usage Hours (activity heatmap)  ->  GET /v1/analytics/activity-heatmap
+# ============================================================================
+
+class HeatmapCell(BaseModel):
+    dow: int = Field(..., description="Day of week: 0=Sunday ... 6=Saturday.")
+    day_name: str
+    hour: int = Field(..., description="Hour of day, 0-23.")
+    events: int = 0
+
+
+class ActivityHeatmapResponse(BaseModel):
+    days: int = 30
+    cells: list[HeatmapCell] = Field(default_factory=list)
+    busiest: HeatmapCell | None = None
+
+
+# ============================================================================
+# User Journey Funnel  ->  GET /v1/analytics/user-journey-funnel
+# ============================================================================
+
+class FunnelStep(BaseModel):
+    step: str
+    label: str
+    users: int = 0
+    pct_of_top: float = 0.0
+    drop_from_prev_pct: float = 0.0
+
+
+class UserJourneyFunnelResponse(BaseModel):
+    days: int = 30
+    steps: list[FunnelStep] = Field(default_factory=list)
+
+
+# ============================================================================
+# Session Quality  ->  GET /v1/analytics/session-quality
+# ============================================================================
+
+class SessionQualityResponse(BaseModel):
+    days: int = 30
+    total_sessions: int = 0
+    avg_events_per_session: float = 0.0
+    avg_session_seconds: float = 0.0
+    avg_session_minutes: float = 0.0
+    bounce_rate_pct: float = 0.0
+
+
+# ============================================================================
+# Search-to-View Conversion  ->  GET /v1/analytics/search-to-view-conversion
+# ============================================================================
+
+class SearchToViewConversionResponse(BaseModel):
+    days: int = 30
+    searchers: int = 0
+    converters: int = 0
+    conversion_rate_pct: float = 0.0
