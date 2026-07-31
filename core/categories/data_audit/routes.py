@@ -159,22 +159,15 @@ async def get_data_quality(
     response_model=NewListingsResponse,
     status_code=status.HTTP_200_OK,
     summary="New Property Listings",
-    description="Recently listed properties (public-safe: internet_list=TRUE and "
-                "allowed statuses only). Filter by days/postal_code/city/status; paginated.",
+    description="Recently listed properties (public-safe: internet_list=TRUE and allowed statuses only).",
 )
 async def get_new_listings(
-    days: int = Query(7, ge=1, le=365, description="How far back to look, in days."),
+    days: int = Query(7, ge=1, le=365),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    postal_code: str | None = Query(None, description="Exact ZIP match."),
-    city: str | None = Query(None, description="City name (partial match)."),
-    status: str | None = Query(None, description="Narrow to one allowed status."),
     db: AsyncSession = Depends(get_schema_session("analytics")),
 ):
-    return await DataAuditService.get_new_listings(
-        db, days=days, limit=limit, offset=offset,
-        postal_code=postal_code, city=city, status=status,
-    )
+    return await DataAuditService.get_new_listings(db, days=days, limit=limit, offset=offset)
  
  
 # ============================================================================
