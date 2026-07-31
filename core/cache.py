@@ -85,6 +85,8 @@ audit_counts_cache       = TTLCache(maxsize=8,  ttl=300)
 audit_coverage_cache     = TTLCache(maxsize=8,  ttl=300)
 audit_coverage_gaps_cache = TTLCache(maxsize=32, ttl=300)
 audit_quality_cache      = TTLCache(maxsize=8,  ttl=300)
+audit_new_listings_cache         = TTLCache(maxsize=64, ttl=60)
+audit_new_listings_summary_cache = TTLCache(maxsize=16, ttl=60)
 
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
     """
