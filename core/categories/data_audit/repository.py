@@ -256,8 +256,8 @@ async def completeness(session: AsyncSession) -> list[dict]:
 # table, so these functions work on the same "analytics" session the rest of the
 # data_audit module uses (search_path does not matter — the table is qualified).
 # Change MLS_SCHEMA to whatever schema your Django app uses.
-#MLS_SCHEMA = "public"
-_MLS_LISTING = f"zipdata_idxlisting"
+MLS_SCHEMA = "public"
+_MLS_LISTING = f"{MLS_SCHEMA}.zipdata_idxlisting"
  
 # Public-safe statuses. Confirm the exact set with your IDX/compliance rules;
 # "Closed" is intentionally excluded from *new* listings.
@@ -266,18 +266,8 @@ _STATUS_IN = "(" + ", ".join(f"'{s}'" for s in ALLOWED_STATUSES) + ")"
 _PUBLIC_SAFE = f"internet_list = TRUE AND standard_status IN {_STATUS_IN}"
  
  
-async def new_listings(
-    session: AsyncSession,
-    days: int,
-    limit: int,
-    offset: int,
-    postal_code: str | None = None,
-    city: str | None = None,
-    status: str | None = None,
-) -> list[dict]:
-    # CAST(:p AS text) is required: a bare ":p IS NULL" sends an untyped NULL and
-    # asyncpg raises "could not determine data type of parameter".
-    sql = f"""
+async def new_listings(session: AsyncSession, days: int, limit: int, offset: int) -> list[dict]:
+    return await _rows(session, """
         SELECT
             listing_key_numeric,
             listing_id,
@@ -300,19 +290,13 @@ async def new_listings(
             source_payload->>'YearBuilt'          AS year_built,
             source_payload->>'LotSizeAcres'       AS lot_size_acres,
             to_char(created_at, 'YYYY-MM-DD HH24:MI') AS listed_at
-        FROM {_MLS_LISTING}
-        WHERE {_PUBLIC_SAFE}
+        FROM public.zipdata_idxlisting
+        WHERE internet_list = TRUE
+          AND standard_status IN ('Active', 'Active Under Contract', 'Coming Soon', 'Pending')
           AND created_at >= now() - (:days * interval '1 day')
-          AND (CAST(:postal_code AS text) IS NULL OR postal_code = CAST(:postal_code AS text))
-          AND (CAST(:city AS text)        IS NULL OR city ILIKE CAST(:city AS text))
-          AND (CAST(:status AS text)      IS NULL OR standard_status = CAST(:status AS text))
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
-    """
-    return await _rows(session, sql, {
-        "days": days, "limit": limit, "offset": offset,
-        "postal_code": postal_code, "city": city, "status": status,
-    })
+    """, {"days": days, "limit": limit, "offset": offset})
  
  
 async def new_listings_summary(session: AsyncSession, days: int) -> dict:

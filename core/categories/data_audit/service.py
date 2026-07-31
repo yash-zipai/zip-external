@@ -136,20 +136,9 @@ class DataAuditService:
     @staticmethod
     @cached(audit_new_listings_cache)
     async def get_new_listings(
-        session: AsyncSession,
-        days: int = 7,
-        limit: int = 50,
-        offset: int = 0,
-        postal_code: str | None = None,
-        city: str | None = None,
-        status: str | None = None,
+        session: AsyncSession, days: int = 7, limit: int = 50, offset: int = 0,
     ) -> NewListingsResponse:
-        rows = await repo.new_listings(
-            session, days, limit, offset,
-            postal_code=postal_code,
-            city=(f"%{city}%" if city else None),  # ILIKE wildcards
-            status=status,
-        )
+        rows = await repo.new_listings(session, days, limit, offset)
         items = [
             NewListingItem(
                 listing_key_numeric=str(r["listing_key_numeric"]),
@@ -159,12 +148,12 @@ class DataAuditService:
                 city=r.get("city"),
                 state=r.get("state"),
                 postal_code=r.get("postal_code"),
-                latitude=_f(r.get("latitude")),
-                longitude=_f(r.get("longitude")),
-                list_price=_f(r.get("list_price")),
-                bedrooms=_f(r.get("bedrooms")),
-                bathrooms=_f(r.get("bathrooms")),
-                living_area=_f(r.get("living_area")),
+                latitude=r.get("latitude"),
+                longitude=r.get("longitude"),
+                list_price=r.get("list_price"),
+                bedrooms=r.get("bedrooms"),
+                bathrooms=r.get("bathrooms"),
+                living_area=r.get("living_area"),
                 property_class=r.get("property_class"),
                 is_lease_listing=bool(r.get("is_lease_listing")),
                 listing_office_name=r.get("listing_office_name"),
