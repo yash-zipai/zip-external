@@ -2,8 +2,8 @@
 # Global Settings
 #################################################
 
-data_dir: "C:/temp/vector-data"          # <-- CHANGED: Windows path (create this folder). /var/lib/vector is Linux-only.
-
+#data_dir: "C:/temp/vector-data"          # <-- CHANGED: Windows path (create this folder). /var/lib/vector is Linux-only.
+data_dir: /var/lib/vector
 #################################################
 # Vector API
 #################################################
@@ -19,9 +19,9 @@ api:
 sources:
 
   zipai_logs:
-    type: file
+    type: docker_logs
     include:
-      - "C:/temp/zipai.log"               # <-- CHANGED: forward slashes (backslashes break Vector's glob on Windows)
+      - zipai-external-api               # <-- CHANGED: forward slashes (backslashes break Vector's glob on Windows)
     read_from: beginning
     ignore_older_secs: 86400
 
@@ -94,8 +94,7 @@ sinks:
     inputs:
       - analytics_events
 
-    uri: http://localhost:8001/v1/internal/vector/events   # <-- CHANGED: localhost (not api:) + /v1 prefix
-
+    uri: http://api:8001/v1/internal/vector/events  
     method: post
 
     encoding:
