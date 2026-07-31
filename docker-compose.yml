@@ -68,6 +68,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64M
+
   vector:
     image: timberio/vector:0.46.1-alpine
     container_name: zipai-vector
@@ -77,11 +78,13 @@ services:
     volumes:
       - ./vector/vector.yml:/etc/vector/vector.yaml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - vector-data:/var/lib/vector
     ports:
       - "8686:8686"
     environment:
       APP_ENV: ${APP_ENV:-production}
     command: ["--config", "/etc/vector/vector.yaml"]
 
-
- 
+# Top-level named volumes — must be at column 0, a sibling of `services:`
+volumes:
+  vector-data:
