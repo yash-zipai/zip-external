@@ -83,3 +83,66 @@ class CompletenessRow(BaseModel):
 
 class DataQualityResponse(BaseModel):
     items: List[CompletenessRow]
+
+
+# ── 7) New property listings (MLS / IDX) ──────────────────────────────────────
+class NewListingItem(BaseModel):
+    listing_key_numeric: str
+    listing_id: Optional[str] = None
+    standard_status: Optional[str] = None
+ 
+    # address / location (display uses the compliance-filtered address)
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+ 
+    # core facts
+    list_price: Optional[float] = None
+    bedrooms: Optional[float] = None
+    bathrooms: Optional[float] = None
+    living_area: Optional[float] = None
+    property_class: Optional[str] = None
+    is_lease_listing: bool = False
+ 
+    # attribution
+    listing_office_name: Optional[str] = None
+    listing_member_name: Optional[str] = None
+ 
+    # rich RESO fields pulled from source_payload JSONB
+    property_type: Optional[str] = None
+    year_built: Optional[str] = None
+    lot_size_acres: Optional[str] = None
+ 
+    # when it entered our system (the "new listing" signal)
+    listed_at: Optional[str] = None
+ 
+ 
+class NewListingsResponse(BaseModel):
+    days: int
+    returned: int          # rows in this page
+    limit: int
+    offset: int
+    items: List[NewListingItem]
+ 
+ 
+class StatusCount(BaseModel):
+    standard_status: str
+    listings: int
+ 
+ 
+class CityCount(BaseModel):
+    city: str
+    listings: int
+ 
+ 
+class NewListingsSummaryResponse(BaseModel):
+    days: int
+    total_new_listings: int
+    for_sale: int
+    for_lease: int
+    zipcodes_covered: int
+    by_status: List[StatusCount]
+    top_cities: List[CityCount]

@@ -239,3 +239,113 @@ async def completeness(session: AsyncSession) -> list[dict]:
         UNION ALL {_zip_missing('schools.schools_details')}
         ORDER BY missing_pct DESC
     """)
+
+ 
+# ── 7) New property listings (MLS / IDX) ──────────────────────────────────────
+# Source: the normalized Django table zipdata_idxlisting.
+#
+# COMPLIANCE (from the team's IDX schema doc — enforced in SQL, not optional):
+#   * Only rows with internet_list = TRUE may be exposed publicly.
+#   * Only an allowed set of standard_status values may be shown.
+#   * "DB rows may exist that must not be shown publicly" — so these filters are
+#     hard-wired into every query below; there is no path that skips them.
+#   * Rich RESO fields (YearBuilt, PropertyType…) come from source_payload JSONB
+#     via ->>'PascalCaseName'. We never invent columns for them.
+#
+# The IDX tables live in a NAMED schema. MLS_SCHEMA is used to fully-qualify the
+# table, so these functions work on the same "analytics" session the rest of the
+# data_audit module uses (search_path does not matter — the table is qualified).
+# Change MLS_SCHEMA to whatever schema your Django app uses.
+MLS_SCHEMA = "public"
+_MLS_LISTING = f"{MLS_SCHEMA}.zipdata_idxlisting"
+ 
+# Public-safe statuses. Confirm the exact set with your IDX/compliance rules;
+# "Closed" is intentionally excluded from *new* listings.
+ALLOWED_STATUSES = ("Active", "Active Under Contract", "Coming Soon", "Pending")
+_STATUS_IN = "(" + ", ".join(f"'{s}'" for s in ALLOWED_STATUSES) + ")"
+_PUBLIC_SAFE = f"internet_list = TRUE AND standard_status IN {_STATUS_IN}"
+ 
+ 
+async def new_listings(
+    session: AsyncSession,
+    days: int,
+    limit: int,
+    offset: int,
+    postal_code: str | None = None,
+    city: str | None = None,
+    status: str | None = None,
+) -> list[dict]:
+    # CAST(:p AS text) is required: a bare ":p IS NULL" sends an untyped NULL and
+    # asyncpg raises "could not determine data type of parameter".
+    sql = f"""
+        SELECT
+            listing_key_numeric,
+            listing_id,
+            standard_status,
+            filtered_address                      AS address,
+            city,
+            state_or_province                     AS state,
+            postal_code,
+            latitude,
+            longitude,
+            list_price,
+            bedrooms_total                        AS bedrooms,
+            bathrooms_total_integer               AS bathrooms,
+            living_area,
+            property_class,
+            is_lease_listing,
+            listing_office_name,
+            listing_member_name,
+            source_payload->>'PropertyType'       AS property_type,
+            source_payload->>'YearBuilt'          AS year_built,
+            source_payload->>'LotSizeAcres'       AS lot_size_acres,
+            to_char(created_at, 'YYYY-MM-DD HH24:MI') AS listed_at
+        FROM {_MLS_LISTING}
+        WHERE {_PUBLIC_SAFE}
+          AND created_at >= now() - (:days * interval '1 day')
+          AND (CAST(:postal_code AS text) IS NULL OR postal_code = CAST(:postal_code AS text))
+          AND (CAST(:city AS text)        IS NULL OR city ILIKE CAST(:city AS text))
+          AND (CAST(:status AS text)      IS NULL OR standard_status = CAST(:status AS text))
+        ORDER BY created_at DESC
+        LIMIT :limit OFFSET :offset
+    """
+    return await _rows(session, sql, {
+        "days": days, "limit": limit, "offset": offset,
+        "postal_code": postal_code, "city": city, "status": status,
+    })
+ 
+ 
+async def new_listings_summary(session: AsyncSession, days: int) -> dict:
+    return await _one(session, f"""
+        SELECT
+            COUNT(*)                                      AS total_new_listings,
+            COUNT(*) FILTER (WHERE NOT is_lease_listing)  AS for_sale,
+            COUNT(*) FILTER (WHERE is_lease_listing)      AS for_lease,
+            COUNT(DISTINCT postal_code)                   AS zipcodes_covered
+        FROM {_MLS_LISTING}
+        WHERE {_PUBLIC_SAFE}
+          AND created_at >= now() - (:days * interval '1 day')
+    """, {"days": days})
+ 
+ 
+async def new_listings_by_status(session: AsyncSession, days: int) -> list[dict]:
+    return await _rows(session, f"""
+        SELECT standard_status, COUNT(*) AS listings
+        FROM {_MLS_LISTING}
+        WHERE {_PUBLIC_SAFE}
+          AND created_at >= now() - (:days * interval '1 day')
+        GROUP BY standard_status
+        ORDER BY listings DESC
+    """, {"days": days})
+ 
+ 
+async def new_listings_top_cities(session: AsyncSession, days: int, limit: int = 10) -> list[dict]:
+    return await _rows(session, f"""
+        SELECT COALESCE(city, '(unknown)') AS city, COUNT(*) AS listings
+        FROM {_MLS_LISTING}
+        WHERE {_PUBLIC_SAFE}
+          AND created_at >= now() - (:days * interval '1 day')
+        GROUP BY COALESCE(city, '(unknown)')
+        ORDER BY listings DESC
+        LIMIT :limit
+    """, {"days": days, "limit": limit})
