@@ -22,13 +22,14 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, ConfigDict
 
 # ============================================================================
 # Request Model (Vector -> FastAPI)
 # ============================================================================
 
 class AnalyticsEventRequest(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True) # new added 31/07/2026
     """
     Request body received from Vector.
     """
