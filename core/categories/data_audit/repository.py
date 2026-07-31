@@ -256,8 +256,8 @@ async def completeness(session: AsyncSession) -> list[dict]:
 # table, so these functions work on the same "analytics" session the rest of the
 # data_audit module uses (search_path does not matter — the table is qualified).
 # Change MLS_SCHEMA to whatever schema your Django app uses.
-MLS_SCHEMA = "public"
-_MLS_LISTING = f"{MLS_SCHEMA}.zipdata_idxlisting"
+#MLS_SCHEMA = "public"
+_MLS_LISTING = f"zipdata_idxlisting"
  
 # Public-safe statuses. Confirm the exact set with your IDX/compliance rules;
 # "Closed" is intentionally excluded from *new* listings.
