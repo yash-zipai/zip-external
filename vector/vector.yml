@@ -19,9 +19,9 @@ api:
 sources:
 
   zipai_logs:
-    type: docker_logs
+    type: docker_logs   #files
     include:
-      - zipai-external-api               # <-- CHANGED: forward slashes (backslashes break Vector's glob on Windows)
+      - zipai-external-api             #- "C:/temp/zipai.log"  # <-- CHANGED: forward slashes (backslashes break Vector's glob on Windows)
     read_from: beginning
     ignore_older_secs: 86400
 

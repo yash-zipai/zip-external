@@ -33,7 +33,7 @@ async def get_schools_higher_ed(
 ) -> list[dict[str, Any]]:
     sql = text("""
         SELECT nces_id, school_name, school_type, enrollment,
-               admission_rate, completion_rate, tuition_in, tuition_out,rating, reviews_count,
+               admission_rate, completion_rate, tuition_low, tuition_high, rating, reviews_count,
                school_url, rank_in_zip, latitude, longitude, address, phone
         FROM schools.schools_details
         WHERE zipcode = :zip
@@ -93,7 +93,7 @@ async def get_school_details(
                low_grade, high_grade, enrollment, teachers_fte,
                round(enrollment::numeric / NULLIF(teachers_fte, 0), 1)
                     AS students_per_teacher,
-               admission_rate, completion_rate, tuition_in, tuition_out,rating, reviews_count,
+               admission_rate, completion_rate, tuition_low, tuition_high,rating, reviews_count,
                 rank_in_zip, latitude, longitude, data_year
         FROM schools.schools_details
         WHERE nces_id = :nces_id;
