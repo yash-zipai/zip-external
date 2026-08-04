@@ -44,8 +44,8 @@ class SchoolHigherEdItem(BaseModel):
     enrollment: int | None = None
     admission_rate: float | None = None
     completion_rate: float | None = None
-    tuition_in: float | None = None
-    tuition_out: float | None = None
+    tuition_low: float | None = None
+    tuition_high: float | None = None
     school_url: str | None = None
     rank_in_zip: int | None = None
     latitude: float | None = None
@@ -101,8 +101,8 @@ class SchoolDetailResponse(BaseModel):
     students_per_teacher: float | None = None
     admission_rate: float | None = None
     completion_rate: float | None = None
-    tuition_in: float | None = None
-    tuition_out: float | None = None
+    tuition_low: float | None = None
+    tuition_high: float | None = None
     rank_in_zip: int | None = None
     latitude: float | None = None
     longitude: float | None = None
