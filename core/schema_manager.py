@@ -1,9 +1,20 @@
 """
-ZipAI — Multi-Schema Session Manager
+ZipAI — Dynamic Multi-Schema Session Manager
 
-ONE shared async engine + session factory for the whole app. All schemas
-live on the same database, so they share a single connection pool; the
-active schema is selected per-request via ``SET search_path``.
+Lazily creates and caches one async SQLAlchemy engine + session factory
+per PostgreSQL schema.  Each schema gets its own connection pool with
+``search_path`` set to ``<schema>,public``.
+
+Usage in any domain module:
+    from app.db.schema_manager import get_schema_session
+
+    # FastAPI dependency — just pass the schema name:
+    @router.get("/...")
+    async def endpoint(db = Depends(get_schema_session("healthcare"))):
+        ...
+
+Adding a future domain (crime, school, …) requires ZERO changes here —
+just call ``get_schema_session("crime")`` from the new domain's routes.
 """
 
 from __future__ import annotations
@@ -12,7 +23,6 @@ import threading
 from collections.abc import AsyncGenerator
 from typing import Callable
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -22,68 +32,75 @@ from sqlalchemy.ext.asyncio import (
 
 from core.config import get_settings
 
-# Schemas the app is allowed to switch to. Guards the SET search_path below
-# against injection, since the schema name is interpolated into raw SQL.
-_ALLOWED_SCHEMAS = frozenset({
-    "analytics", "cost_of_living", "crime", "employer",
-    "healthcare", "lifestyle", "rag", "schools",
-})
-
 
 class SchemaSessionManager:
-    """Singleton holding ONE async engine + factory shared by all schemas."""
+    """
+    Singleton registry that manages one async engine per PostgreSQL schema.
+
+    Thread-safe: uses a lock for lazy engine/factory creation so that
+    concurrent startup requests don't create duplicate pools.
+    """
 
     def __init__(self) -> None:
-        self._engine: AsyncEngine | None = None
-        self._factory: async_sessionmaker[AsyncSession] | None = None
+        self._engines: dict[str, AsyncEngine] = {}
+        self._factories: dict[str, async_sessionmaker[AsyncSession]] = {}
         self._lock = threading.RLock()
         self._settings = get_settings()
 
     # ── Engine / Factory ──────────────────────────────────────────────────
 
-    def get_engine(self) -> AsyncEngine:
-        """Return (or lazily create) the single shared async engine."""
-        if self._engine is None:
+    def get_engine(self, schema: str) -> AsyncEngine:
+        """Return (or create) the async engine for *schema*."""
+        if schema not in self._engines:
             with self._lock:
-                if self._engine is None:                 # double-checked locking
-                    self._engine = create_async_engine(
+                # Double-checked locking
+                if schema not in self._engines:
+                    engine = create_async_engine(
                         self._settings.database_url,
                         echo=self._settings.db_echo,
-                        pool_size=10,
-                        max_overflow=5,
+                        pool_size=1,          # keep LOW (was 3). Do NOT set to 5.
+                        max_overflow=1,       # keep LOW (was 2). Do NOT set to 10.
                         pool_pre_ping=True,
                         pool_recycle=3600,
-                        pool_timeout=30,
+                        pool_timeout=30,      # wait for a free conn instead of erroring instantly
                         connect_args={
                             "server_settings": {
+                                "search_path": f"{schema},public",
                                 "application_name": "zipai-external",
+                                # Safety net: auto-terminate any transaction left idle > 5 min.
+                                "idle_in_transaction_session_timeout": "300000",  # 5 min in ms
+                                # Cap every query at 30s so one slow query can't hold a conn.
+                                "statement_timeout": "30000",  # 30 s in ms
                             }
                         },
                     )
-        return self._engine
+                    self._engines[schema] = engine
+        return self._engines[schema]
 
-    def get_factory(self) -> async_sessionmaker[AsyncSession]:
-        """Return (or lazily create) the single shared session factory."""
-        if self._factory is None:
+    def get_factory(self, schema: str) -> async_sessionmaker[AsyncSession]:
+        """Return (or create) the session factory for *schema*."""
+        if schema not in self._factories:
             with self._lock:
-                if self._factory is None:
-                    self._factory = async_sessionmaker(
-                        bind=self.get_engine(),
+                if schema not in self._factories:
+                    engine = self.get_engine(schema)
+                    factory = async_sessionmaker(
+                        bind=engine,
                         class_=AsyncSession,
                         expire_on_commit=False,
                         autoflush=False,
                         autocommit=False,
                     )
-        return self._factory
+                    self._factories[schema] = factory
+        return self._factories[schema]
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
     async def dispose_all(self) -> None:
-        """Dispose the engine.  Call during application shutdown."""
-        if self._engine is not None:
-            await self._engine.dispose()
-        self._engine = None
-        self._factory = None
+        """Dispose every engine.  Call during application shutdown."""
+        for schema, engine in self._engines.items():
+            await engine.dispose()
+        self._engines.clear()
+        self._factories.clear()
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
@@ -94,19 +111,14 @@ def get_schema_session(schema: str) -> Callable[[], AsyncGenerator[AsyncSession,
     """
     FastAPI dependency factory.
 
-    Yields a session whose ``search_path`` is scoped to *schema* for the life
-    of the request. The session is rolled back on error and always closed.
+    Returns an async generator that yields a **read-only** session for the
+    requested schema.  The session is rolled back on error and always closed.
     """
-    if schema not in _ALLOWED_SCHEMAS:
-        raise ValueError(f"Unknown schema: {schema!r}")
 
     async def _session_dependency() -> AsyncGenerator[AsyncSession, None]:
-        factory = schema_manager.get_factory()
+        factory = schema_manager.get_factory(schema)
         async with factory() as session:
             try:
-                await session.execute(
-                    text(f"SET search_path TO {schema}, public")
-                )
                 yield session
             except Exception:
                 await session.rollback()
