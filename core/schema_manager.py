@@ -58,8 +58,8 @@ class SchemaSessionManager:
                     engine = create_async_engine(
                         self._settings.database_url,
                         echo=self._settings.db_echo,
-                        pool_size=3,          # keep LOW (was 3). Do NOT set to 5.
-                        max_overflow=2,       # keep LOW (was 2). Do NOT set to 10.
+                        pool_size=1,          # keep LOW (was 3). Do NOT set to 5.
+                        max_overflow=1,       # keep LOW (was 2). Do NOT set to 10.
                         pool_pre_ping=True,
                         pool_recycle=3600,
                         pool_timeout=30,      # wait for a free conn instead of erroring instantly
