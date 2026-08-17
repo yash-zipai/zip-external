@@ -36,6 +36,8 @@ from core.categories.ai_admin.routes import router as ai_admin_router
 
 from core.categories.data_audit.routes import router as data_audit_router
 
+from core.categories.signal.market import market_router
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — dispose every per-schema engine on shutdown."""
@@ -86,7 +88,12 @@ def create_app() -> FastAPI:
 
     #data audit
     app.include_router(data_audit_router, prefix="/v1")
+
+    #market
+    app.include_router(market_router, prefix="/v1")   # match your existing prefix
     return app
+
+
 
 
 app = create_app()
