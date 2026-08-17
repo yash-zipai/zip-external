@@ -103,6 +103,10 @@ market_price_reductions_cache  = TTLCache(maxsize=64, ttl=600)
 market_segments_cache          = TTLCache(maxsize=64, ttl=600)
 market_summary_cache           = TTLCache(maxsize=64, ttl=600)
 
+#rate  (Freddie Mac mortgage rates)
+rate_current_cache = TTLCache(maxsize=8,  ttl=1800)
+rate_history_cache = TTLCache(maxsize=16, ttl=1800)
+
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
     """
     Build a deterministic, hashable cache key from arbitrary arguments.
