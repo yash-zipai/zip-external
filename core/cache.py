@@ -88,6 +88,21 @@ audit_quality_cache      = TTLCache(maxsize=8,  ttl=300)
 audit_new_listings_cache         = TTLCache(maxsize=64, ttl=60)
 audit_new_listings_summary_cache = TTLCache(maxsize=16, ttl=60)
 
+
+#market  (MLS market-analysis charts — signal.listing_fact)
+market_median_sale_price_cache = TTLCache(maxsize=64, ttl=600)
+market_median_price_yoy_cache  = TTLCache(maxsize=64, ttl=600)
+market_ppsf_month_cache        = TTLCache(maxsize=64, ttl=600)
+market_ppsf_city_cache         = TTLCache(maxsize=64, ttl=600)
+market_closed_sales_cache      = TTLCache(maxsize=64, ttl=600)
+market_new_listings_cache      = TTLCache(maxsize=64, ttl=600)
+market_inventory_cache         = TTLCache(maxsize=64, ttl=600)
+market_dom_cache               = TTLCache(maxsize=64, ttl=600)
+market_sale_to_list_cache      = TTLCache(maxsize=64, ttl=600)
+market_price_reductions_cache  = TTLCache(maxsize=64, ttl=600)
+market_segments_cache          = TTLCache(maxsize=64, ttl=600)
+market_summary_cache           = TTLCache(maxsize=64, ttl=600)
+
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
     """
     Build a deterministic, hashable cache key from arbitrary arguments.
