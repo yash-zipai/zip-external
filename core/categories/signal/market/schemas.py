@@ -83,6 +83,9 @@ class PpsfByCityItem(BaseModel):
 class PpsfByCityResponse(BaseModel):
     scope: MarketScopeEcho
     window: str = Field(..., description="'current_month' or 'trailing_12m'.")
+    median_ppsf_reference: float | None = Field(
+        None, description="Median $/sqft across the returned areas — baseline for the diverging chart."
+    )
     items: list[PpsfByCityItem] = Field(default_factory=list)
 
 
@@ -91,6 +94,7 @@ class PpsfByCityResponse(BaseModel):
 
 class ClosedSalesPoint(BaseModel):
     month: date
+    property_type: str = Field(..., description="SF or CONDO.")
     closed_sales: int = 0
 
 
@@ -180,6 +184,62 @@ class SegmentsResponse(BaseModel):
     scope: MarketScopeEcho
     status: str = Field(..., description="Which set: closed | active | new.")
     items: list[SegmentItem] = Field(default_factory=list)
+
+
+# ── Market Activity Pulse (events by kind) ────────────────────────────────────
+
+
+class ActivityPulsePoint(BaseModel):
+    month: date
+    kind: str = Field(..., description="Event kind, e.g. new_listing, price_drop, sold.")
+    events: int = 0
+
+
+class ActivityPulseResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[ActivityPulsePoint] = Field(default_factory=list)
+
+
+# ── Price Drop Pressure ───────────────────────────────────────────────────────
+
+
+class PriceDropPressurePoint(BaseModel):
+    month: date
+    price_drops: int = 0
+    new_listings: int = 0
+    drops_per_100_new: float | None = None
+
+
+class PriceDropPressureResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[PriceDropPressurePoint] = Field(default_factory=list)
+
+
+# ── Buyer Demand (pending) ────────────────────────────────────────────────────
+
+
+class BuyerDemandPoint(BaseModel):
+    month: date
+    pending_events: int = 0
+
+
+class BuyerDemandResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[BuyerDemandPoint] = Field(default_factory=list)
+
+
+# ── Listing Churn (relisted vs removed) ───────────────────────────────────────
+
+
+class ListingChurnPoint(BaseModel):
+    month: date
+    relisted: int = 0
+    removed: int = 0
+
+
+class ListingChurnResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[ListingChurnPoint] = Field(default_factory=list)
 
 
 # ── + Local summary table ─────────────────────────────────────────────────────

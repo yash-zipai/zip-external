@@ -120,17 +120,19 @@ async def ppsf_by_city(session, area_level, area_code, property_type, trailing_1
 # ── 5. Closed sales per month ─────────────────────────────────────────────────
 
 
-async def closed_sales(session, area_level, area_code, property_type):
+async def closed_sales(session, area_level, area_code):
     col = _area_col(area_level)
     sql = f"""
-        SELECT date_trunc('month', close_date)::date AS month, count(*) AS closed_sales
+        SELECT date_trunc('month', close_date)::date AS month,
+               property_type,
+               count(*) AS closed_sales
         FROM   signal.listing_fact
         WHERE  standard_status = 'Closed'
-          AND  property_type = :ptype
+          AND  property_type IN ('SF','CONDO')
           AND  {col} = :area
-        GROUP  BY 1 ORDER BY 1
+        GROUP  BY 1, 2 ORDER BY 1, 2
     """
-    return await _rows(session, sql, {"ptype": property_type, "area": area_code})
+    return await _rows(session, sql, {"area": area_code})
 
 
 # ── 6. New listings per month (SF vs Condo) ───────────────────────────────────
@@ -209,21 +211,77 @@ async def sale_to_list(session, area_level, area_code, property_type):
     return await _rows(session, sql, {"ptype": property_type, "area": area_code})
 
 
-# ── 9b. Price reductions per month (event table, joined for area) ─────────────
+# ── 9b. Price reductions per month (from signal.market_event) ─────────────────
 
 
-async def price_reductions(session, area_level, area_code):
+async def price_reductions(session, area_level, area_code, property_type):
     col = _area_col(area_level)
     sql = f"""
-        SELECT date_trunc('month', pe.event_date)::date AS month, count(*) AS price_reductions
-        FROM   public.zipdata_idxlistingpriceevent pe
-        JOIN   signal.listing_fact f ON f.listing_key_numeric = pe.listing_key_numeric
-        WHERE  pe.event_type = 'price_change'
-          AND  pe.price < pe.prior_price
-          AND  f.{col} = :area
-        GROUP  BY 1 ORDER BY 1
+        SELECT month, count(*) AS price_reductions
+        FROM   signal.market_event
+        WHERE  kind = 'price_drop' AND {col} = :area AND property_type = :ptype
+        GROUP  BY month ORDER BY month
     """
-    return await _rows(session, sql, {"area": area_code})
+    return await _rows(session, sql, {"area": area_code, "ptype": property_type})
+
+
+# ── Event charts (all read the signal.market_event table) ─────────────────────
+
+
+async def activity_pulse(session, area_level, area_code, property_type):
+    """Market Activity Pulse — events by kind per month."""
+    col = _area_col(area_level)
+    sql = f"""
+        SELECT month, kind, count(*) AS events
+        FROM   signal.market_event
+        WHERE  {col} = :area AND property_type = :ptype
+          AND  kind IN ('new_listing','price_drop','price_increase','sold',
+                        'pending','relisted','listing_removed')
+        GROUP  BY month, kind ORDER BY month, kind
+    """
+    return await _rows(session, sql, {"area": area_code, "ptype": property_type})
+
+
+async def price_drop_pressure(session, area_level, area_code, property_type):
+    """Price drops per month + drops per 100 new listings."""
+    col = _area_col(area_level)
+    sql = f"""
+        SELECT month,
+               count(*) FILTER (WHERE kind = 'price_drop')  AS price_drops,
+               count(*) FILTER (WHERE kind = 'new_listing') AS new_listings,
+               round(100.0 * count(*) FILTER (WHERE kind = 'price_drop')
+                     / NULLIF(count(*) FILTER (WHERE kind = 'new_listing'), 0), 1) AS drops_per_100_new
+        FROM   signal.market_event
+        WHERE  {col} = :area AND property_type = :ptype
+        GROUP  BY month ORDER BY month
+    """
+    return await _rows(session, sql, {"area": area_code, "ptype": property_type})
+
+
+async def buyer_demand(session, area_level, area_code, property_type):
+    """Pending events per month."""
+    col = _area_col(area_level)
+    sql = f"""
+        SELECT month, count(*) AS pending_events
+        FROM   signal.market_event
+        WHERE  kind = 'pending' AND {col} = :area AND property_type = :ptype
+        GROUP  BY month ORDER BY month
+    """
+    return await _rows(session, sql, {"area": area_code, "ptype": property_type})
+
+
+async def listing_churn(session, area_level, area_code, property_type):
+    """Relisted vs removed per month."""
+    col = _area_col(area_level)
+    sql = f"""
+        SELECT month,
+               count(*) FILTER (WHERE kind = 'relisted')        AS relisted,
+               count(*) FILTER (WHERE kind = 'listing_removed') AS removed
+        FROM   signal.market_event
+        WHERE  {col} = :area AND property_type = :ptype
+        GROUP  BY month ORDER BY month
+    """
+    return await _rows(session, sql, {"area": area_code, "ptype": property_type})
 
 
 # ── 10. Sales/listings by price segment, by city ──────────────────────────────
