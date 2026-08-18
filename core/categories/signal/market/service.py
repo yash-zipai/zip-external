@@ -12,9 +12,9 @@ categories exactly.
 
 from __future__ import annotations
 
+import statistics
 from typing import Any
 
-from cachetools import TTLCache
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.cache import (
@@ -31,10 +31,17 @@ from core.cache import (
     market_price_reductions_cache,
     market_segments_cache,
     market_summary_cache,
+    market_activity_cache,
+    market_price_drop_pressure_cache,
+    market_demand_cache,
+    market_churn_cache,
 )
-
 from core.categories.signal.market import repository as repo
 from core.categories.signal.market.schemas import (
+    ActivityPulsePoint, ActivityPulseResponse,
+    PriceDropPressurePoint, PriceDropPressureResponse,
+    BuyerDemandPoint, BuyerDemandResponse,
+    ListingChurnPoint, ListingChurnResponse,
     ClosedSalesPoint, ClosedSalesResponse,
     DaysOnMarketResponse, DomPoint,
     InventoryPoint, InventoryResponse,
@@ -50,7 +57,6 @@ from core.categories.signal.market.schemas import (
     SummaryResponse, SummaryRow,
     YoyPoint,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -112,16 +118,20 @@ class MarketService:
         rows = await repo.ppsf_by_city(session, area_level, area_code, property_type, trailing_12m)
         items = [PpsfByCityItem(city=r["city"], median_ppsf=_f(r["median_ppsf"]),
                                 median_sqft=_f(r["median_sqft"]), closed=_i(r["closed"])) for r in rows]
+        vals = sorted(i.median_ppsf for i in items if i.median_ppsf is not None)
+        ref = (statistics.median(vals) if vals else None)
         return PpsfByCityResponse(scope=_scope(area_level, area_code, property_type),
-                                  window="trailing_12m" if trailing_12m else "current_month", items=items)
+                                  window="trailing_12m" if trailing_12m else "current_month",
+                                  median_ppsf_reference=ref, items=items)
 
     # 5 ─────────────────────────────────────────────────────────────────────
     @staticmethod
     @cached(market_closed_sales_cache)
-    async def closed_sales(session: AsyncSession, area_level, area_code, property_type) -> ClosedSalesResponse:
-        rows = await repo.closed_sales(session, area_level, area_code, property_type)
-        pts = [ClosedSalesPoint(month=r["month"], closed_sales=_i(r["closed_sales"])) for r in rows]
-        return ClosedSalesResponse(scope=_scope(area_level, area_code, property_type), points=pts)
+    async def closed_sales(session: AsyncSession, area_level, area_code) -> ClosedSalesResponse:
+        rows = await repo.closed_sales(session, area_level, area_code)
+        pts = [ClosedSalesPoint(month=r["month"], property_type=r["property_type"],
+                                closed_sales=_i(r["closed_sales"])) for r in rows]
+        return ClosedSalesResponse(scope=_scope(area_level, area_code), points=pts)
 
     # 6 ─────────────────────────────────────────────────────────────────────
     @staticmethod
@@ -160,10 +170,44 @@ class MarketService:
     # 9b ────────────────────────────────────────────────────────────────────
     @staticmethod
     @cached(market_price_reductions_cache)
-    async def price_reductions(session: AsyncSession, area_level, area_code) -> PriceReductionsResponse:
-        rows = await repo.price_reductions(session, area_level, area_code)
+    async def price_reductions(session: AsyncSession, area_level, area_code, property_type) -> PriceReductionsResponse:
+        rows = await repo.price_reductions(session, area_level, area_code, property_type)
         pts = [PriceReductionsPoint(month=r["month"], price_reductions=_i(r["price_reductions"])) for r in rows]
-        return PriceReductionsResponse(scope=_scope(area_level, area_code), points=pts)
+        return PriceReductionsResponse(scope=_scope(area_level, area_code, property_type), points=pts)
+
+    # Market Activity Pulse ──────────────────────────────────────────────────
+    @staticmethod
+    @cached(market_activity_cache)
+    async def activity_pulse(session: AsyncSession, area_level, area_code, property_type) -> ActivityPulseResponse:
+        rows = await repo.activity_pulse(session, area_level, area_code, property_type)
+        pts = [ActivityPulsePoint(month=r["month"], kind=r["kind"], events=_i(r["events"])) for r in rows]
+        return ActivityPulseResponse(scope=_scope(area_level, area_code, property_type), points=pts)
+
+    # Price Drop Pressure ────────────────────────────────────────────────────
+    @staticmethod
+    @cached(market_price_drop_pressure_cache)
+    async def price_drop_pressure(session: AsyncSession, area_level, area_code, property_type) -> PriceDropPressureResponse:
+        rows = await repo.price_drop_pressure(session, area_level, area_code, property_type)
+        pts = [PriceDropPressurePoint(month=r["month"], price_drops=_i(r["price_drops"]),
+                                      new_listings=_i(r["new_listings"]),
+                                      drops_per_100_new=_f(r["drops_per_100_new"])) for r in rows]
+        return PriceDropPressureResponse(scope=_scope(area_level, area_code, property_type), points=pts)
+
+    # Buyer Demand ───────────────────────────────────────────────────────────
+    @staticmethod
+    @cached(market_demand_cache)
+    async def buyer_demand(session: AsyncSession, area_level, area_code, property_type) -> BuyerDemandResponse:
+        rows = await repo.buyer_demand(session, area_level, area_code, property_type)
+        pts = [BuyerDemandPoint(month=r["month"], pending_events=_i(r["pending_events"])) for r in rows]
+        return BuyerDemandResponse(scope=_scope(area_level, area_code, property_type), points=pts)
+
+    # Listing Churn ──────────────────────────────────────────────────────────
+    @staticmethod
+    @cached(market_churn_cache)
+    async def listing_churn(session: AsyncSession, area_level, area_code, property_type) -> ListingChurnResponse:
+        rows = await repo.listing_churn(session, area_level, area_code, property_type)
+        pts = [ListingChurnPoint(month=r["month"], relisted=_i(r["relisted"]), removed=_i(r["removed"])) for r in rows]
+        return ListingChurnResponse(scope=_scope(area_level, area_code, property_type), points=pts)
 
     # 10 ────────────────────────────────────────────────────────────────────
     @staticmethod

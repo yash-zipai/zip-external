@@ -29,6 +29,8 @@ from core.categories.signal.market.schemas import (
     MedianPriceYoYResponse, MedianSalePriceResponse, NewListingsResponse,
     PpsfByCityResponse, PpsfByMonthResponse, PriceReductionsResponse,
     SaleToListResponse, SegmentsResponse, SummaryResponse,
+    ActivityPulseResponse, PriceDropPressureResponse,
+    BuyerDemandResponse, ListingChurnResponse,
 )
 from .service import MarketService
 
@@ -80,8 +82,8 @@ def ptype_param(
 # ── 1. Median sale price over time ────────────────────────────────────────────
 
 
-@router.get("/market/median-sale-price/", response_model=MedianSalePriceResponse,
-            summary="Median sale price over time")
+@router.get("/market/home-price-trend/", response_model=MedianSalePriceResponse,
+            summary="Home Price Trend")
 async def median_sale_price(
     scope: MarketScope = Depends(market_scope),
     ptype: str = Depends(ptype_param),
@@ -93,8 +95,8 @@ async def median_sale_price(
 # ── 2. Median price YoY % (SF vs Condo) ───────────────────────────────────────
 
 
-@router.get("/market/median-price-yoy/", response_model=MedianPriceYoYResponse,
-            summary="Median price year-over-year % (SF vs Condo)")
+@router.get("/market/price-momentum/", response_model=MedianPriceYoYResponse,
+            summary="Price Momentum (YoY %, SF vs Condo)")
 async def median_price_yoy(
     scope: MarketScope = Depends(market_scope),
     db: AsyncSession = Depends(_db),
@@ -105,8 +107,8 @@ async def median_price_yoy(
 # ── 3. Price per sq ft by month ───────────────────────────────────────────────
 
 
-@router.get("/market/price-per-sqft/", response_model=PpsfByMonthResponse,
-            summary="Median price per square foot by month")
+@router.get("/market/value-per-sqft/", response_model=PpsfByMonthResponse,
+            summary="Value per Square Foot")
 async def ppsf_by_month(
     scope: MarketScope = Depends(market_scope),
     ptype: str = Depends(ptype_param),
@@ -118,8 +120,8 @@ async def ppsf_by_month(
 # ── 4. Median price per sq ft by city ─────────────────────────────────────────
 
 
-@router.get("/market/price-per-sqft-by-city/", response_model=PpsfByCityResponse,
-            summary="Median price per sq ft ranked by city")
+@router.get("/market/where-value-lives/", response_model=PpsfByCityResponse,
+            summary="Where Value Lives ($/sqft by area)")
 async def ppsf_by_city(
     scope: MarketScope = Depends(market_scope),
     ptype: str = Depends(ptype_param),
@@ -132,21 +134,20 @@ async def ppsf_by_city(
 # ── 5. Closed sales per month ─────────────────────────────────────────────────
 
 
-@router.get("/market/closed-sales/", response_model=ClosedSalesResponse,
-            summary="Closed sales per month")
+@router.get("/market/homes-sold/", response_model=ClosedSalesResponse,
+            summary="Homes Sold")
 async def closed_sales(
     scope: MarketScope = Depends(market_scope),
-    ptype: str = Depends(ptype_param),
     db: AsyncSession = Depends(_db),
 ) -> ClosedSalesResponse:
-    return await MarketService.closed_sales(db, scope.area_level, scope.area_code, ptype)
+    return await MarketService.closed_sales(db, scope.area_level, scope.area_code)
 
 
 # ── 6. New listings per month (SF vs Condo) ───────────────────────────────────
 
 
-@router.get("/market/new-listings/", response_model=NewListingsResponse,
-            summary="New listings per month (SF vs Condo)")
+@router.get("/market/fresh-supply/", response_model=NewListingsResponse,
+            summary="Fresh Supply (new listings)")
 async def new_listings(
     scope: MarketScope = Depends(market_scope),
     db: AsyncSession = Depends(_db),
@@ -157,8 +158,8 @@ async def new_listings(
 # ── 7. Active & in-contract inventory ─────────────────────────────────────────
 
 
-@router.get("/market/inventory/", response_model=InventoryResponse,
-            summary="Active & in-contract listings over time")
+@router.get("/market/available-inventory/", response_model=InventoryResponse,
+            summary="Available Inventory")
 async def inventory(
     scope: MarketScope = Depends(market_scope),
     ptype: str = Depends(ptype_param),
@@ -170,8 +171,8 @@ async def inventory(
 # ── 8. Days on market (SF vs Condo) ───────────────────────────────────────────
 
 
-@router.get("/market/days-on-market/", response_model=DaysOnMarketResponse,
-            summary="Median days on market (SF vs Condo)")
+@router.get("/market/speed-to-sell/", response_model=DaysOnMarketResponse,
+            summary="Speed to Sell (days on market)")
 async def days_on_market(
     scope: MarketScope = Depends(market_scope),
     db: AsyncSession = Depends(_db),
@@ -182,8 +183,8 @@ async def days_on_market(
 # ── 9a. Sale-to-list ratio ────────────────────────────────────────────────────
 
 
-@router.get("/market/sale-to-list/", response_model=SaleToListResponse,
-            summary="Sale-to-list price ratio by month")
+@router.get("/market/buyer-leverage/", response_model=SaleToListResponse,
+            summary="Buyer Leverage (sale-to-list)")
 async def sale_to_list(
     scope: MarketScope = Depends(market_scope),
     ptype: str = Depends(ptype_param),
@@ -199,16 +200,69 @@ async def sale_to_list(
             summary="Price reductions per month")
 async def price_reductions(
     scope: MarketScope = Depends(market_scope),
+    ptype: str = Depends(ptype_param),
     db: AsyncSession = Depends(_db),
 ) -> PriceReductionsResponse:
-    return await MarketService.price_reductions(db, scope.area_level, scope.area_code)
+    return await MarketService.price_reductions(db, scope.area_level, scope.area_code, ptype)
+
+
+# ── Market Activity Pulse ─────────────────────────────────────────────────────
+
+
+@router.get("/market/activity-pulse/", response_model=ActivityPulseResponse,
+            summary="Market Activity Pulse (events by kind)")
+async def activity_pulse(
+    scope: MarketScope = Depends(market_scope),
+    ptype: str = Depends(ptype_param),
+    db: AsyncSession = Depends(_db),
+) -> ActivityPulseResponse:
+    return await MarketService.activity_pulse(db, scope.area_level, scope.area_code, ptype)
+
+
+# ── Price Drop Pressure ───────────────────────────────────────────────────────
+
+
+@router.get("/market/price-drop-pressure/", response_model=PriceDropPressureResponse,
+            summary="Price drop pressure (buyer-leverage signal)")
+async def price_drop_pressure(
+    scope: MarketScope = Depends(market_scope),
+    ptype: str = Depends(ptype_param),
+    db: AsyncSession = Depends(_db),
+) -> PriceDropPressureResponse:
+    return await MarketService.price_drop_pressure(db, scope.area_level, scope.area_code, ptype)
+
+
+# ── Buyer Demand ──────────────────────────────────────────────────────────────
+
+
+@router.get("/market/buyer-demand/", response_model=BuyerDemandResponse,
+            summary="Buyer demand (pending per month)")
+async def buyer_demand(
+    scope: MarketScope = Depends(market_scope),
+    ptype: str = Depends(ptype_param),
+    db: AsyncSession = Depends(_db),
+) -> BuyerDemandResponse:
+    return await MarketService.buyer_demand(db, scope.area_level, scope.area_code, ptype)
+
+
+# ── Listing Churn ─────────────────────────────────────────────────────────────
+
+
+@router.get("/market/listing-churn/", response_model=ListingChurnResponse,
+            summary="Listing churn (relisted vs removed)")
+async def listing_churn(
+    scope: MarketScope = Depends(market_scope),
+    ptype: str = Depends(ptype_param),
+    db: AsyncSession = Depends(_db),
+) -> ListingChurnResponse:
+    return await MarketService.listing_churn(db, scope.area_level, scope.area_code, ptype)
 
 
 # ── 10. Sales / listings by price segment ─────────────────────────────────────
 
 
-@router.get("/market/segments/", response_model=SegmentsResponse,
-            summary="Sales/listings by price segment, by city")
+@router.get("/market/sales-by-price-range/", response_model=SegmentsResponse,
+            summary="Sales by Price Range")
 async def segments(
     scope: MarketScope = Depends(market_scope),
     ptype: str = Depends(ptype_param),
@@ -227,8 +281,8 @@ async def segments(
 # ── + Local summary table ─────────────────────────────────────────────────────
 
 
-@router.get("/market/summary/", response_model=SummaryResponse,
-            summary="Local summary table (per city)")
+@router.get("/market/neighborhood-scorecard/", response_model=SummaryResponse,
+            summary="Neighborhood Scorecard")
 async def summary(
     scope: MarketScope = Depends(market_scope),
     ptype: str = Depends(ptype_param),
