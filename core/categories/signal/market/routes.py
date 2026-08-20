@@ -85,14 +85,17 @@ async def price_drop_pressure(scope: MarketScope = Depends(market_scope),
     return await MarketService.price_drop_pressure(db, scope.area_level, scope.area_code, ptype)
 
 
-@router.get("/market/price-cuts/", response_model=PriceCutsResponse, summary="Negotiating Room — cut details (drill-down)")
+@router.get("/market/price-cuts/")
 async def price_cuts(scope: MarketScope = Depends(market_scope),
                      ptype: str = Depends(ptype_param),
-                     year: int | None = Query(None, ge=2000, le=2100, description="Filter by year, e.g. 2026."),
-                     month: int | None = Query(None, ge=1, le=12, description="Filter by month number 1-12."),
-                     db: AsyncSession = Depends(_db)) -> PriceCutsResponse:
-    return await MarketService.price_cuts(db, scope.area_level, scope.area_code, ptype, year, month, ONLY_PUBLIC_DEFAULT)
-
+                     year: int | None = Query(None, ge=2000, le=2100),
+                     month: int | None = Query(None, ge=1, le=12),
+                     db: AsyncSession = Depends(_db)):
+    import traceback
+    try:
+        return await MarketService.price_cuts(db, scope.area_level, scope.area_code, ptype, year, month, ONLY_PUBLIC_DEFAULT)
+    except Exception:
+        return {"ERROR": traceback.format_exc()}
 
 # ═══════════════════════ GRAPH 3 · SUPPLY & DEMAND ═══════════════════════════
 @router.get("/market/fresh-supply/", response_model=FreshSupplyResponse, summary="Fresh Supply")
@@ -124,16 +127,17 @@ async def speed_to_sell(scope: MarketScope = Depends(market_scope),
 
 
 # ═══════════ SHARED DRILL-DOWN · "See listings ->" (any card) ════════════════
-@router.get("/market/listings/", response_model=ListingsResponse, summary="Listings drill-down (active|pending|sold|new)")
+@router.get("/market/listings/")
 async def listings(scope: MarketScope = Depends(market_scope),
                    ptype: str = Depends(ptype_param),
-                   status_: str = Query("active", alias="status", description="active | pending | sold | new"),
-                   year: int | None = Query(None, ge=2000, le=2100, description="For sold/new: filter by year."),
-                   month: int | None = Query(None, ge=1, le=12, description="For sold/new: filter by month 1-12."),
+                   status_: str = Query("active", alias="status"),
+                   year: int | None = Query(None, ge=2000, le=2100),
+                   month: int | None = Query(None, ge=1, le=12),
                    limit: int = Query(100, ge=1, le=500),
-                   db: AsyncSession = Depends(_db)) -> ListingsResponse:
-    s = status_.lower()
-    if s not in ALLOWED_STATUS:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            detail=f"status must be one of {sorted(ALLOWED_STATUS)}.")
-    return await MarketService.listings(db, scope.area_level, scope.area_code, ptype, s, year, month, ONLY_PUBLIC_DEFAULT, limit)
+                   db: AsyncSession = Depends(_db)):
+    import traceback
+    try:
+        s = status_.lower()
+        return await MarketService.listings(db, scope.area_level, scope.area_code, ptype, s, year, month, ONLY_PUBLIC_DEFAULT, limit)
+    except Exception:
+        return {"ERROR": traceback.format_exc()}
