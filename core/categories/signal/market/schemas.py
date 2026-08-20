@@ -1,208 +1,47 @@
 """
-ZipAI — Market (MLS) Pydantic response schemas.
+ZipAI — Market (MLS) response schemas — SLIM build.
 
-Defines the API contract for the market-analysis endpoints. Every chart is
-scoped to an area (county | city | zip) and, where relevant, a property type
-(SF | CONDO | ...). Series endpoints return one point per month; ranking and
-summary endpoints return one item per city.
-
-Source data: signal.listing_fact (+ public.zipdata_idxlistingpriceevent).
+Only the models for the 5 dashboard graphs + the two drill-down feeds
+(price-cuts, listings) + the low-confidence accuracy flag.
 """
-
 from __future__ import annotations
 
 from datetime import date
-
 from pydantic import BaseModel, Field
 
 
-# ── Shared scope echo ─────────────────────────────────────────────────────────
-
-
 class MarketScopeEcho(BaseModel):
-    """The area/type the response was computed for (echoed back to the client)."""
-
-    area_level: str = Field(..., description="Area granularity: county | city | zip.")
-    area_code: str = Field(..., description="Area value, e.g. 'San Mateo' or '94103'.")
-    property_type: str | None = Field(
-        None, description="Property type filter applied, or null when the chart returns all types."
-    )
+    area_level: str
+    area_code: str
+    property_type: str | None = None
 
 
-# ── 1. Median sale price over time ────────────────────────────────────────────
-
-
-class MedianSalePricePoint(BaseModel):
-    month: date = Field(..., description="First day of the month.")
-    median_sale_price: float | None = Field(None, description="Median closed sale price.")
-    closed_sales: int = Field(0, description="Number of closed sales that month.")
-
-
-class MedianSalePriceResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[MedianSalePricePoint] = Field(default_factory=list)
-
-
-# ── 2. Median price YoY % (SF vs Condo) ───────────────────────────────────────
-
-
-class YoyPoint(BaseModel):
+# ── Graph 1 · Prices ──────────────────────────────────────────────────────────
+class HomePriceTrendPoint(BaseModel):
     month: date
-    property_type: str = Field(..., description="SF or CONDO.")
-    yoy_pct: float | None = Field(None, description="Year-over-year % change in median price.")
+    median_sale_price: float | None = None
+    sample_size: int = 0
+    low_confidence: bool = False          # True when sample_size < 5
 
 
-class MedianPriceYoYResponse(BaseModel):
+class HomePriceTrendResponse(BaseModel):
     scope: MarketScopeEcho
-    points: list[YoyPoint] = Field(default_factory=list)
+    points: list[HomePriceTrendPoint] = Field(default_factory=list)
 
 
-# ── 3. Price per sq ft by month ───────────────────────────────────────────────
-
-
-class PpsfPoint(BaseModel):
+class ValuePerSqftPoint(BaseModel):
     month: date
-    median_ppsf: float | None = Field(None, description="Median sale price per square foot.")
+    median_ppsf: float | None = None
+    sample_size: int = 0
+    low_confidence: bool = False
 
 
-class PpsfByMonthResponse(BaseModel):
+class ValuePerSqftResponse(BaseModel):
     scope: MarketScopeEcho
-    points: list[PpsfPoint] = Field(default_factory=list)
+    points: list[ValuePerSqftPoint] = Field(default_factory=list)
 
 
-# ── 4. Median price per sq ft by city (ranked) ────────────────────────────────
-
-
-class PpsfByCityItem(BaseModel):
-    city: str | None = None
-    median_ppsf: float | None = Field(None, description="Median $/sqft for the city.")
-    median_sqft: float | None = Field(None, description="Median living area (sq ft).")
-    closed: int = Field(0, description="Closed sales in the window.")
-
-
-class PpsfByCityResponse(BaseModel):
-    scope: MarketScopeEcho
-    window: str = Field(..., description="'current_month' or 'trailing_12m'.")
-    median_ppsf_reference: float | None = Field(
-        None, description="Median $/sqft across the returned areas — baseline for the diverging chart."
-    )
-    items: list[PpsfByCityItem] = Field(default_factory=list)
-
-
-# ── 5. Closed sales per month ─────────────────────────────────────────────────
-
-
-class ClosedSalesPoint(BaseModel):
-    month: date
-    property_type: str = Field(..., description="SF or CONDO.")
-    closed_sales: int = 0
-
-
-class ClosedSalesResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[ClosedSalesPoint] = Field(default_factory=list)
-
-
-# ── 6. New listings per month (SF vs Condo) ───────────────────────────────────
-
-
-class NewListingsPoint(BaseModel):
-    month: date
-    property_type: str
-    new_listings: int = 0
-
-
-class NewListingsResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[NewListingsPoint] = Field(default_factory=list)
-
-
-# ── 7. Active & in-contract inventory ─────────────────────────────────────────
-
-
-class InventoryPoint(BaseModel):
-    month: date
-    active_listings: int = 0
-    in_contract: int = 0
-
-
-class InventoryResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[InventoryPoint] = Field(default_factory=list)
-
-
-# ── 8. Days on market ─────────────────────────────────────────────────────────
-
-
-class DomPoint(BaseModel):
-    month: date
-    property_type: str
-    median_dom: float | None = None
-
-
-class DaysOnMarketResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[DomPoint] = Field(default_factory=list)
-
-
-# ── 9a. Sale-to-list ratio ────────────────────────────────────────────────────
-
-
-class SaleToListPoint(BaseModel):
-    month: date
-    sale_to_list_pct: float | None = None
-
-
-class SaleToListResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[SaleToListPoint] = Field(default_factory=list)
-
-
-# ── 9b. Price reductions per month ────────────────────────────────────────────
-
-
-class PriceReductionsPoint(BaseModel):
-    month: date
-    price_reductions: int = 0
-
-
-class PriceReductionsResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[PriceReductionsPoint] = Field(default_factory=list)
-
-
-# ── 10. Sales/listings by price segment (by city) ─────────────────────────────
-
-
-class SegmentItem(BaseModel):
-    city: str | None = None
-    price_segment: str = Field(..., description="e.g. '$1M-$1.5M'.")
-    count: int = 0
-
-
-class SegmentsResponse(BaseModel):
-    scope: MarketScopeEcho
-    status: str = Field(..., description="Which set: closed | active | new.")
-    items: list[SegmentItem] = Field(default_factory=list)
-
-
-# ── Market Activity Pulse (events by kind) ────────────────────────────────────
-
-
-class ActivityPulsePoint(BaseModel):
-    month: date
-    kind: str = Field(..., description="Event kind, e.g. new_listing, price_drop, sold.")
-    events: int = 0
-
-
-class ActivityPulseResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[ActivityPulsePoint] = Field(default_factory=list)
-
-
-# ── Price Drop Pressure ───────────────────────────────────────────────────────
-
-
+# ── Graph 2 · Negotiating room ────────────────────────────────────────────────
 class PriceDropPressurePoint(BaseModel):
     month: date
     price_drops: int = 0
@@ -215,45 +54,93 @@ class PriceDropPressureResponse(BaseModel):
     points: list[PriceDropPressurePoint] = Field(default_factory=list)
 
 
-# ── Buyer Demand (pending) ────────────────────────────────────────────────────
-
-
-class BuyerDemandPoint(BaseModel):
-    month: date
-    pending_events: int = 0
-
-
-class BuyerDemandResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[BuyerDemandPoint] = Field(default_factory=list)
-
-
-# ── Listing Churn (relisted vs removed) ───────────────────────────────────────
-
-
-class ListingChurnPoint(BaseModel):
-    month: date
-    relisted: int = 0
-    removed: int = 0
-
-
-class ListingChurnResponse(BaseModel):
-    scope: MarketScopeEcho
-    points: list[ListingChurnPoint] = Field(default_factory=list)
-
-
-# ── + Local summary table ─────────────────────────────────────────────────────
-
-
-class SummaryRow(BaseModel):
+# drill-down: the individual cuts
+class PriceCutRow(BaseModel):
+    event_date: date
+    listing_key_numeric: str
+    address: str | None = None
     city: str | None = None
-    sale_to_list_pct: float | None = None
-    absorption_pct: float | None = None
-    overbid_pct: float | None = None
-    dom: float | None = None
-    appreciation_12mo_pct: float | None = None
+    zip_code: str | None = None
+    prior_price: float | None = None
+    price: float | None = None
+    cut_amount: float | None = None
+    cut_pct: float | None = None
 
 
-class SummaryResponse(BaseModel):
+class PriceCutsResponse(BaseModel):
     scope: MarketScopeEcho
-    rows: list[SummaryRow] = Field(default_factory=list)
+    month: date | None = None
+    count: int = 0
+    rows: list[PriceCutRow] = Field(default_factory=list)
+
+
+# ── Graph 3 · Supply & demand ─────────────────────────────────────────────────
+class FreshSupplyPoint(BaseModel):
+    month: date
+    property_type: str
+    new_listings: int = 0
+
+
+class FreshSupplyResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[FreshSupplyPoint] = Field(default_factory=list)
+
+
+class HomesSoldPoint(BaseModel):
+    month: date
+    closed_sales: int = 0
+
+
+class HomesSoldResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[HomesSoldPoint] = Field(default_factory=list)
+
+
+# ── Graph 4 · What is available ───────────────────────────────────────────────
+class InventoryPoint(BaseModel):
+    month: date
+    active_listings: int = 0
+    in_contract: int = 0
+
+
+class InventoryResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[InventoryPoint] = Field(default_factory=list)
+
+
+# ── Graph 5 · How fast homes sell ─────────────────────────────────────────────
+class SpeedToSellPoint(BaseModel):
+    month: date
+    property_type: str
+    median_dom: float | None = None
+    sample_size: int = 0
+    low_confidence: bool = False
+
+
+class SpeedToSellResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[SpeedToSellPoint] = Field(default_factory=list)
+
+
+# ── Shared drill-down: individual listings (any card's "See listings ->") ──────
+class ListingRow(BaseModel):
+    listing_key_numeric: str
+    address: str | None = None
+    city: str | None = None
+    zip_code: str | None = None
+    list_price: float | None = None
+    sale_price: float | None = None
+    beds: float | None = None
+    baths: float | None = None
+    sqft: float | None = None
+    status: str | None = None
+    dom: int | None = None
+    list_date: date | None = None
+    close_date: date | None = None
+
+
+class ListingsResponse(BaseModel):
+    scope: MarketScopeEcho
+    status: str
+    count: int = 0
+    rows: list[ListingRow] = Field(default_factory=list)
