@@ -72,7 +72,7 @@ async def price_drop_pressure(session, area_level, area_code, property_type):
 
 
 # ── Graph 2 drill-down · PRICE CUTS (individual cut events) ────────────────────
-async def price_cuts(session, area_level, area_code, property_type, year, month, only_public):
+async def price_cuts(session, area_level, area_code, property_type, on_date, year, month, only_public):
     col = _area_col(area_level)
     sql = f"""
         SELECT me.event_date,
@@ -84,12 +84,13 @@ async def price_cuts(session, area_level, area_code, property_type, year, month,
                round(((1 - me.price/NULLIF(me.prior_price,0))*100)::numeric, 1) AS cut_pct
         FROM   signal.market_event me
         WHERE  me.kind = 'price_drop' AND me.{col} = :area AND me.property_type = :ptype
+          AND  (:on_date::date IS NULL OR me.event_date = :on_date::date)
           AND  (:year  IS NULL OR EXTRACT(YEAR  FROM me.event_date) = :year)
           AND  (:month IS NULL OR EXTRACT(MONTH FROM me.event_date) = :month)
         ORDER  BY me.event_date DESC, cut_amount DESC
     """
     return await _rows(session, sql, {"area": area_code, "ptype": property_type,
-                                      "year": year, "month": month})
+                                      "on_date": on_date, "year": year, "month": month})
 
 
 # ── Graph 3 · FRESH SUPPLY (new listings, SF vs Condo) ────────────────────────
@@ -155,7 +156,7 @@ async def speed_to_sell(session, area_level, area_code):
 
 
 # ── Shared drill-down · LISTINGS (status = active|pending|sold|new) ───────────
-async def listings(session, area_level, area_code, property_type, status_key, year, month, only_public, limit):
+async def listings(session, area_level, area_code, property_type, status_key, on_date, year, month, only_public, limit):
     col = _area_col(area_level)
     sql = f"""
         SELECT f.listing_key_numeric,
@@ -176,6 +177,9 @@ async def listings(session, area_level, area_code, property_type, status_key, ye
                 (:status = 'sold'    AND f.standard_status = 'Closed') OR
                 (:status = 'new'     AND f.list_date IS NOT NULL)
                )
+          AND  (:on_date::date IS NULL
+                OR (:status = 'sold' AND f.close_date = :on_date::date)
+                OR (:status = 'new'  AND f.list_date  = :on_date::date))
           AND  (:year IS NULL
                 OR (:status = 'sold' AND EXTRACT(YEAR  FROM f.close_date) = :year)
                 OR (:status = 'new'  AND EXTRACT(YEAR  FROM f.list_date)  = :year))
@@ -186,5 +190,5 @@ async def listings(session, area_level, area_code, property_type, status_key, ye
         LIMIT  :limit
     """
     return await _rows(session, sql, {"area": area_code, "ptype": property_type,
-                                      "status": status_key, "year": year, "month": month,
-                                      "limit": limit})
+                                      "status": status_key, "on_date": on_date,
+                                      "year": year, "month": month, "limit": limit})
