@@ -77,23 +77,19 @@ async def price_cuts(session, area_level, area_code, property_type, year, month,
     sql = f"""
         SELECT me.event_date,
                me.listing_key_numeric,
-               l.source_payload->>'UnparsedAddress' AS address,
+               NULL::text AS address,
                me.city, me.zip_code,
                me.prior_price, me.price,
-               (me.prior_price - me.price)                           AS cut_amount,
+               (me.prior_price - me.price)                             AS cut_amount,
                round(((1 - me.price/NULLIF(me.prior_price,0))*100)::numeric, 1) AS cut_pct
         FROM   signal.market_event me
-        LEFT   JOIN public.zipdata_idxlisting l ON l.listing_key_numeric = me.listing_key_numeric
         WHERE  me.kind = 'price_drop' AND me.{col} = :area AND me.property_type = :ptype
           AND  (:year  IS NULL OR EXTRACT(YEAR  FROM me.event_date) = :year)
           AND  (:month IS NULL OR EXTRACT(MONTH FROM me.event_date) = :month)
-          AND  (:only_public = false
-                OR COALESCE(l.internet_list, false) = true
-                OR l.internet_list IS NULL)
         ORDER  BY me.event_date DESC, cut_amount DESC
     """
     return await _rows(session, sql, {"area": area_code, "ptype": property_type,
-                                      "year": year, "month": month, "only_public": only_public})
+                                      "year": year, "month": month})
 
 
 # ── Graph 3 · FRESH SUPPLY (new listings, SF vs Condo) ────────────────────────
@@ -163,17 +159,16 @@ async def listings(session, area_level, area_code, property_type, status_key, ye
     col = _area_col(area_level)
     sql = f"""
         SELECT f.listing_key_numeric,
-               l.source_payload->>'UnparsedAddress' AS address,
+               NULL::text AS address,
                f.city, f.zip_code,
                f.list_price, f.sale_price,
                f.bedrooms_total          AS beds,
                f.bathrooms_total_integer AS baths,
                f.living_sqft             AS sqft,
                f.standard_status         AS status,
-               COALESCE(f.dom_reported, (f.pending_date - f.list_date)) AS dom,
+               COALESCE(f.dom_reported, (f.pending_date - f.list_date))::int AS dom,
                f.list_date, f.close_date
         FROM   signal.listing_fact f
-        LEFT   JOIN public.zipdata_idxlisting l ON l.listing_key_numeric = f.listing_key_numeric
         WHERE  f.{col} = :area AND f.property_type = :ptype
           AND  (
                 (:status = 'active'  AND f.standard_status = 'Active') OR
@@ -187,12 +182,9 @@ async def listings(session, area_level, area_code, property_type, status_key, ye
           AND  (:month IS NULL
                 OR (:status = 'sold' AND EXTRACT(MONTH FROM f.close_date) = :month)
                 OR (:status = 'new'  AND EXTRACT(MONTH FROM f.list_date)  = :month))
-          AND  (:only_public = false
-                OR COALESCE(f.internet_list, false) = true
-                OR f.internet_list IS NULL)
         ORDER  BY COALESCE(f.close_date, f.list_date) DESC NULLS LAST
         LIMIT  :limit
     """
     return await _rows(session, sql, {"area": area_code, "ptype": property_type,
                                       "status": status_key, "year": year, "month": month,
-                                      "only_public": only_public, "limit": limit})
+                                      "limit": limit})
