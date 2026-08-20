@@ -84,8 +84,8 @@ async def price_cuts(session, area_level, area_code, property_type, year, month,
                round(((1 - me.price/NULLIF(me.prior_price,0))*100)::numeric, 1) AS cut_pct
         FROM   signal.market_event me
         WHERE  me.kind = 'price_drop' AND me.{col} = :area AND me.property_type = :ptype
-          AND  (:year  IS NULL OR EXTRACT(YEAR  FROM me.event_date) = :year)
-          AND  (:month IS NULL OR EXTRACT(MONTH FROM me.event_date) = :month)
+          AND  (CAST(:year  AS int) IS NULL OR EXTRACT(YEAR  FROM me.event_date) = :year)
+          AND  (CAST(:month AS int) IS NULL OR EXTRACT(MONTH FROM me.event_date) = :month)
         ORDER  BY me.event_date DESC, cut_amount DESC
     """
     return await _rows(session, sql, {"area": area_code, "ptype": property_type,
@@ -176,10 +176,10 @@ async def listings(session, area_level, area_code, property_type, status_key, ye
                 (:status = 'sold'    AND f.standard_status = 'Closed') OR
                 (:status = 'new'     AND f.list_date IS NOT NULL)
                )
-          AND  (:year IS NULL
+          AND  (CAST(:year AS int) IS NULL
                 OR (:status = 'sold' AND EXTRACT(YEAR  FROM f.close_date) = :year)
                 OR (:status = 'new'  AND EXTRACT(YEAR  FROM f.list_date)  = :year))
-          AND  (:month IS NULL
+          AND  (CAST(:month AS int) IS NULL
                 OR (:status = 'sold' AND EXTRACT(MONTH FROM f.close_date) = :month)
                 OR (:status = 'new'  AND EXTRACT(MONTH FROM f.list_date)  = :month))
         ORDER  BY COALESCE(f.close_date, f.list_date) DESC NULLS LAST
