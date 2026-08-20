@@ -69,7 +69,8 @@ class PriceCutRow(BaseModel):
 
 class PriceCutsResponse(BaseModel):
     scope: MarketScopeEcho
-    month: date | None = None
+    year: int | None = None
+    month: int | None = None
     count: int = 0
     rows: list[PriceCutRow] = Field(default_factory=list)
 
