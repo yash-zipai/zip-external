@@ -37,12 +37,34 @@ from .schemas import (
 LOW_CONFIDENCE_MIN = 5   # months with fewer closed sales than this are flagged
 
 
-def _i(v) -> int:
-    return int(v) if v is not None else 0
+import datetime as _dt
+from decimal import Decimal as _Decimal
 
 
-def _f(v) -> float | None:
-    return float(v) if v is not None else None
+def _i(v):
+    """Coerce to int, tolerating timedelta, Decimal, float, str, None."""
+    if v is None:
+        return 0
+    if isinstance(v, _dt.timedelta):
+        return int(v.days)
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _f(v):
+    """Coerce to float | None, tolerating Decimal, timedelta, str."""
+    if v is None:
+        return None
+    if isinstance(v, _dt.timedelta):
+        return float(v.days)
+    if isinstance(v, _Decimal):
+        return float(v)
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def _scope(area_level, area_code, ptype=None) -> MarketScopeEcho:
@@ -86,13 +108,13 @@ class MarketService:
 
     @staticmethod
     @cached(market_price_cuts_cache)
-    async def price_cuts(session: AsyncSession, area_level, area_code, ptype, year, month, only_public) -> PriceCutsResponse:
-        rows = await repo.price_cuts(session, area_level, area_code, ptype, year, month, only_public)
+    async def price_cuts(session: AsyncSession, area_level, area_code, ptype, on_date, year, month, only_public) -> PriceCutsResponse:
+        rows = await repo.price_cuts(session, area_level, area_code, ptype, on_date, year, month, only_public)
         out = [PriceCutRow(event_date=r["event_date"], listing_key_numeric=r["listing_key_numeric"],
                            address=r.get("address"), city=r.get("city"), zip_code=r.get("zip_code"),
                            prior_price=_f(r["prior_price"]), price=_f(r["price"]),
                            cut_amount=_f(r["cut_amount"]), cut_pct=_f(r["cut_pct"])) for r in rows]
-        return PriceCutsResponse(scope=_scope(area_level, area_code, ptype), year=year, month=month,
+        return PriceCutsResponse(scope=_scope(area_level, area_code, ptype), on_date=on_date, year=year, month=month,
                                  count=len(out), rows=out)
 
     # Graph 3 · Supply & demand ────────────────────────────────────────────────
@@ -136,8 +158,8 @@ class MarketService:
     # Shared drill-down · listings ─────────────────────────────────────────────
     @staticmethod
     @cached(market_listings_cache)
-    async def listings(session: AsyncSession, area_level, area_code, ptype, status_key, year, month, only_public, limit) -> ListingsResponse:
-        rows = await repo.listings(session, area_level, area_code, ptype, status_key, year, month, only_public, limit)
+    async def listings(session: AsyncSession, area_level, area_code, ptype, status_key, on_date, year, month, only_public, limit) -> ListingsResponse:
+        rows = await repo.listings(session, area_level, area_code, ptype, status_key, on_date, year, month, only_public, limit)
         out = [ListingRow(listing_key_numeric=r["listing_key_numeric"], address=r.get("address"),
                           city=r.get("city"), zip_code=r.get("zip_code"),
                           list_price=_f(r["list_price"]), sale_price=_f(r["sale_price"]),
