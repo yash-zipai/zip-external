@@ -69,7 +69,6 @@ class PriceCutRow(BaseModel):
 
 class PriceCutsResponse(BaseModel):
     scope: MarketScopeEcho
-    on_date: date | None = None
     year: int | None = None
     month: int | None = None
     count: int = 0
