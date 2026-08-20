@@ -81,7 +81,7 @@ async def price_cuts(session, area_level, area_code, property_type, year, month,
                me.city, me.zip_code,
                me.prior_price, me.price,
                (me.prior_price - me.price)                           AS cut_amount,
-               round((1 - me.price/NULLIF(me.prior_price,0))*100, 1) AS cut_pct
+               round(((1 - me.price/NULLIF(me.prior_price,0))*100)::numeric, 1) AS cut_pct
         FROM   signal.market_event me
         LEFT   JOIN public.zipdata_idxlisting l ON l.listing_key_numeric = me.listing_key_numeric
         WHERE  me.kind = 'price_drop' AND me.{col} = :area AND me.property_type = :ptype
