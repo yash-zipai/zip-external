@@ -84,16 +84,18 @@ async def price_drop_pressure(scope: MarketScope = Depends(market_scope),
                               db: AsyncSession = Depends(_db)) -> PriceDropPressureResponse:
     return await MarketService.price_drop_pressure(db, scope.area_level, scope.area_code, ptype)
 
-
 @router.get("/market/price-cuts/", response_model=PriceCutsResponse, summary="Negotiating Room — cut details (drill-down)")
 async def price_cuts(scope: MarketScope = Depends(market_scope),
                      ptype: str = Depends(ptype_param),
                      year: int | None = Query(None, ge=2000, le=2100, description="Filter by year, e.g. 2026."),
                      month: int | None = Query(None, ge=1, le=12, description="Filter by month number 1-12."),
                      db: AsyncSession = Depends(_db)) -> PriceCutsResponse:
-    return await MarketService.price_cuts(db, scope.area_level, scope.area_code, ptype, year, month, ONLY_PUBLIC_DEFAULT)
-
-
+    try:
+        return await MarketService.price_cuts(db, scope.area_level, scope.area_code, ptype, year, month, ONLY_PUBLIC_DEFAULT)
+    except Exception:
+        import traceback
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
+    
 # ═══════════════════════ GRAPH 3 · SUPPLY & DEMAND ═══════════════════════════
 @router.get("/market/fresh-supply/", response_model=FreshSupplyResponse, summary="Fresh Supply")
 async def fresh_supply(scope: MarketScope = Depends(market_scope),
