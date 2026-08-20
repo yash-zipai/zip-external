@@ -90,22 +90,16 @@ audit_new_listings_summary_cache = TTLCache(maxsize=16, ttl=60)
 
 
 #market  (MLS market-analysis charts — signal.listing_fact)
-market_median_sale_price_cache = TTLCache(maxsize=64, ttl=600)
-market_median_price_yoy_cache  = TTLCache(maxsize=64, ttl=600)
-market_ppsf_month_cache        = TTLCache(maxsize=64, ttl=600)
-market_ppsf_city_cache         = TTLCache(maxsize=64, ttl=600)
-market_closed_sales_cache      = TTLCache(maxsize=64, ttl=600)
-market_new_listings_cache      = TTLCache(maxsize=64, ttl=600)
-market_inventory_cache         = TTLCache(maxsize=64, ttl=600)
-market_dom_cache               = TTLCache(maxsize=64, ttl=600)
-market_sale_to_list_cache      = TTLCache(maxsize=64, ttl=600)
-market_price_reductions_cache  = TTLCache(maxsize=64, ttl=600)
-market_segments_cache          = TTLCache(maxsize=64, ttl=600)
-market_summary_cache           = TTLCache(maxsize=64, ttl=600)
-market_activity_cache          = TTLCache(maxsize=64, ttl=600)
-market_price_drop_pressure_cache = TTLCache(maxsize=64, ttl=600)
-market_demand_cache            = TTLCache(maxsize=64, ttl=600)
-market_churn_cache             = TTLCache(maxsize=64, ttl=600)
+market_home_price_trend_cache     = TTLCache(maxsize=256, ttl=900)
+market_value_per_sqft_cache       = TTLCache(maxsize=256, ttl=900)
+market_price_drop_pressure_cache  = TTLCache(maxsize=256, ttl=900)
+market_price_cuts_cache           = TTLCache(maxsize=256, ttl=300)   # drill-down, shorter TTL
+market_fresh_supply_cache         = TTLCache(maxsize=256, ttl=900)
+market_homes_sold_cache           = TTLCache(maxsize=256, ttl=900)
+market_inventory_cache            = TTLCache(maxsize=256, ttl=900)
+market_speed_to_sell_cache        = TTLCache(maxsize=256, ttl=900)
+market_listings_cache             = TTLCache(maxsize=256, ttl=300)   # drill-down, shorter TTL
+ 
 
 #rate  (Freddie Mac mortgage rates)
 rate_current_cache = TTLCache(maxsize=8,  ttl=1800)
