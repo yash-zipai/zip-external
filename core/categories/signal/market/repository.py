@@ -291,9 +291,9 @@ async def listings(session, area_level, area_code, property_type, status_key, ye
           AND  (CAST(:price_max AS numeric) IS NULL OR f.list_price <  :price_max)
           -- dom bucket (Graph 5 drill-down): filter on days on market
           AND  (CAST(:dom_min AS int) IS NULL
-                OR COALESCE(f.dom_reported, (f.pending_date - f.list_date)) >= :dom_min)
+                OR COALESCE(f.dom_reported, (f.close_date - f.list_date)) >= :dom_min)
           AND  (CAST(:dom_max AS int) IS NULL
-                OR COALESCE(f.dom_reported, (f.pending_date - f.list_date)) <= :dom_max)
+                OR COALESCE(f.dom_reported, (f.close_date - f.list_date)) <= :dom_max)
         ORDER  BY COALESCE(ev.event_date, f.close_date, f.list_date) DESC NULLS LAST
         LIMIT  :limit
     """
