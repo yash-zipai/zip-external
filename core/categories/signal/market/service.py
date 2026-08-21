@@ -19,6 +19,8 @@ from core.cache import (
     market_inventory_cache,
     market_speed_to_sell_cache,
     market_listings_cache,
+    market_price_distribution_cache,
+    market_dom_breakdown_cache,
 )
 from . import repository as repo
 from .schemas import (
@@ -32,6 +34,8 @@ from .schemas import (
     InventoryPoint, InventoryResponse,
     SpeedToSellPoint, SpeedToSellResponse,
     ListingRow, ListingsResponse,
+    PriceBand, PriceDistributionResponse,
+    DomBucket, DomBreakdownResponse,
 )
 
 LOW_CONFIDENCE_MIN = 5   # months with fewer closed sales than this are flagged
@@ -142,6 +146,16 @@ class MarketService:
                               in_contract=_i(r["in_contract"])) for r in rows]
         return InventoryResponse(scope=_scope(area_level, area_code, ptype), points=pts)
 
+    # Graph 4 drill-down · price distribution ──────────────────────────────────
+    @staticmethod
+    @cached(market_price_distribution_cache)
+    async def price_distribution(session: AsyncSession, area_level, area_code, ptype) -> PriceDistributionResponse:
+        rows = await repo.price_distribution(session, area_level, area_code, ptype)
+        bands = [PriceBand(band=r["band"], min_price=_f(r["min_price"]),
+                           max_price=_f(r["max_price"]), homes=_i(r["homes"])) for r in rows]
+        return PriceDistributionResponse(scope=_scope(area_level, area_code, ptype), bands=bands)
+
+
     # Graph 5 · How fast homes sell ────────────────────────────────────────────
     @staticmethod
     @cached(market_speed_to_sell_cache)
@@ -155,11 +169,24 @@ class MarketService:
                                         sample_size=n, low_confidence=n < LOW_CONFIDENCE_MIN))
         return SpeedToSellResponse(scope=_scope(area_level, area_code), points=pts)
 
+    # Graph 5 drill-down · DOM breakdown ───────────────────────────────────────
+    @staticmethod
+    @cached(market_dom_breakdown_cache)
+    async def dom_breakdown(session: AsyncSession, area_level, area_code, ptype, year, month) -> DomBreakdownResponse:
+        rows = await repo.dom_breakdown(session, area_level, area_code, ptype, year, month)
+        buckets = [DomBucket(bucket=r["bucket"],
+                             dom_min=(_i(r["dom_min"]) if r["dom_min"] is not None else None),
+                             dom_max=(_i(r["dom_max"]) if r["dom_max"] is not None else None),
+                             homes=_i(r["homes"])) for r in rows]
+        return DomBreakdownResponse(scope=_scope(area_level, area_code, ptype), buckets=buckets)
+
     # Shared drill-down · listings ─────────────────────────────────────────────
     @staticmethod
     @cached(market_listings_cache)
-    async def listings(session: AsyncSession, area_level, area_code, ptype, status_key, year, month, only_public, limit) -> ListingsResponse:
-        rows = await repo.listings(session, area_level, area_code, ptype, status_key, year, month, only_public, limit)
+    async def listings(session: AsyncSession, area_level, area_code, ptype, status_key, year, month,
+                       price_min, price_max, dom_min, dom_max, only_public, limit) -> ListingsResponse:
+        rows = await repo.listings(session, area_level, area_code, ptype, status_key, year, month,
+                                   price_min, price_max, dom_min, dom_max, only_public, limit)
         out = [ListingRow(listing_key_numeric=r["listing_key_numeric"], address=r.get("address"),
                           city=r.get("city"), zip_code=r.get("zip_code"),
                           list_price=_f(r["list_price"]), sale_price=_f(r["sale_price"]),
@@ -168,3 +195,4 @@ class MarketService:
                           list_date=r["list_date"], close_date=r["close_date"]) for r in rows]
         return ListingsResponse(scope=_scope(area_level, area_code, ptype), status=status_key,
                                 count=len(out), rows=out)
+

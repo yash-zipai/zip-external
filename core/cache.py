@@ -99,7 +99,8 @@ market_homes_sold_cache           = TTLCache(maxsize=256, ttl=900)
 market_inventory_cache            = TTLCache(maxsize=256, ttl=900)
 market_speed_to_sell_cache        = TTLCache(maxsize=256, ttl=900)
 market_listings_cache             = TTLCache(maxsize=256, ttl=300)   # drill-down, shorter TTL
- 
+market_price_distribution_cache   = TTLCache(maxsize=256, ttl=900)   # Graph 4 drill-down
+market_dom_breakdown_cache        = TTLCache(maxsize=256, ttl=900)   # Graph 5 drill-down
 
 #rate  (Freddie Mac mortgage rates)
 rate_current_cache = TTLCache(maxsize=8,  ttl=1800)
