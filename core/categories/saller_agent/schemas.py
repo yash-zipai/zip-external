@@ -86,12 +86,14 @@ class PersonRow(BaseModel):
     last_name: str | None = None
     email: str | None = None
     phone_number: str | None = None
+    status: str | None = None
     joined_at: datetime | None = None
 
 
 class PeopleResponse(BaseModel):
     invited_by_id: int
     role: str
+    status: str | None = None
     count: int = 0
     rows: list[PersonRow] = Field(default_factory=list)
 

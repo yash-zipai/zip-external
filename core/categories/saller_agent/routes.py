@@ -94,23 +94,29 @@ async def invites(
 
 
 # ═══════════════════════════ 4 · AGENT CLIENTS ═══════════════════════════════
-@router.get("/agent/clients/", response_model=PeopleResponse, summary="Agent clients (accepted)")
+@router.get("/agent/clients/", response_model=PeopleResponse, summary="Agent clients (dynamic status)")
 async def agent_clients(
     invited_by_id: int = Query(..., description="Logged-in agent's user id (the invite sender)."),
+    status_: str | None = Query(None, alias="status",
+                                description="Filter by invite status (e.g. accepted | declined | pending). Omit for all."),
     limit: int = Query(200, ge=1, le=1000),
     db: AsyncSession = Depends(_db),
 ) -> PeopleResponse:
-    return await AgentService.people_by_role(db, invited_by_id, "client", limit)
+    s = status_.lower() if status_ else None
+    return await AgentService.people_by_role(db, invited_by_id, "client", s, limit)
 
 
 # ═══════════════════════════ 5 · AGENT PARTNERS ══════════════════════════════
-@router.get("/agent/partners/", response_model=PeopleResponse, summary="Agent partners (accepted)")
+@router.get("/agent/partners/", response_model=PeopleResponse, summary="Agent partners (dynamic status)")
 async def agent_partners(
     invited_by_id: int = Query(..., description="Logged-in agent's user id (the invite sender)."),
+    status_: str | None = Query(None, alias="status",
+                                description="Filter by invite status (e.g. accepted | declined | pending). Omit for all."),
     limit: int = Query(200, ge=1, le=1000),
     db: AsyncSession = Depends(_db),
 ) -> PeopleResponse:
-    return await AgentService.people_by_role(db, invited_by_id, "partner", limit)
+    s = status_.lower() if status_ else None
+    return await AgentService.people_by_role(db, invited_by_id, "partner", s, limit)
 
 
 # ═══════════════════════════ 6 · INVITED-BY ══════════════════════════════════
