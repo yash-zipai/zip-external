@@ -39,7 +39,7 @@ from core.categories.data_audit.routes import router as data_audit_router
 from core.categories.signal.market import market_router
 
 from core.categories.signal.rate import rate_router
-from core.categories.saller_agent import agent_router
+from core.categories.seller_agent import agent_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
