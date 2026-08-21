@@ -111,13 +111,14 @@ class AgentService:
     # 4 & 5 · Clients / Partners ───────────────────────────────────────────────
     @staticmethod
     @cached(agent_people_cache)
-    async def people_by_role(session: AsyncSession, invited_by_id, role, limit) -> PeopleResponse:
-        rows = await repo.people_by_role(session, invited_by_id, role, limit)
+    async def people_by_role(session: AsyncSession, invited_by_id, role, status_key, limit) -> PeopleResponse:
+        rows = await repo.people_by_role(session, invited_by_id, role, status_key, limit)
         out = [PersonRow(user_id=(_i(r["user_id"]) if r["user_id"] is not None else None),
                          first_name=r.get("first_name"), last_name=r.get("last_name"),
                          email=r.get("email"), phone_number=r.get("phone_number"),
+                         status=r.get("status"),
                          joined_at=r.get("joined_at")) for r in rows]
-        return PeopleResponse(invited_by_id=invited_by_id, role=role, count=len(out), rows=out)
+        return PeopleResponse(invited_by_id=invited_by_id, role=role, status=status_key, count=len(out), rows=out)
 
     # 6 · Invited-by ───────────────────────────────────────────────────────────
     @staticmethod
