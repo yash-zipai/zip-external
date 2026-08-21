@@ -64,7 +64,7 @@ async def agent_listings(session, agent_key, status_key, limit):
 
 
 # ── 3 · Invites summary (bar-chart counts) ────────────────────────────────────
-async def invites_summary(session, sender_id):
+async def invites_summary(session, invited_by_id):
     sql = """
         SELECT count(*)                                   AS total,
                count(*) FILTER (WHERE status = 'pending')  AS pending,
@@ -73,42 +73,42 @@ async def invites_summary(session, sender_id):
                count(*) FILTER (WHERE role   = 'client')   AS clients,
                count(*) FILTER (WHERE role   = 'partner')  AS partners
         FROM   public.zipdata_temporaryaccount
-        WHERE  invited_by_id = :sender_id
+        WHERE  invited_by_id = :invited_by_id
     """
-    return await _rows(session, sql, {"sender_id": sender_id})
+    return await _rows(session, sql, {"invited_by_id": invited_by_id})
 
 
 # ── 3 · Invites list (drill-down; optional role/status filters) ───────────────
-async def invites(session, sender_id, role, status_key, limit):
+async def invites(session, invited_by_id, role, status_key, limit):
     sql = """
         SELECT id AS invite_id,
                first_name, last_name, email, phone_number,
                role, status, invitation_kind, accepted_at, user_id
         FROM   public.zipdata_temporaryaccount
-        WHERE  invited_by_id = :sender_id
+        WHERE  invited_by_id = :invited_by_id
           AND  (CAST(:role   AS text) IS NULL OR role   = :role)
           AND  (CAST(:status AS text) IS NULL OR status = :status)
         ORDER  BY accepted_at DESC NULLS LAST, id DESC
         LIMIT  :limit
     """
-    return await _rows(session, sql, {"sender_id": sender_id, "role": role,
+    return await _rows(session, sql, {"invited_by_id": invited_by_id, "role": role,
                                       "status": status_key, "limit": limit})
 
 
-# ── 4 & 5 · Clients / Partners (accepted, became real users) ──────────────────
-async def people_by_role(session, sender_id, role, limit):
+# ── 4 & 5 · Clients / Partners (by role, dynamic status) ──────────────────────
+async def people_by_role(session, invited_by_id, role, status_key, limit):
     sql = """
         SELECT user_id, first_name, last_name, email, phone_number,
-               accepted_at AS joined_at
+               status, accepted_at AS joined_at
         FROM   public.zipdata_temporaryaccount
-        WHERE  invited_by_id = :sender_id
+        WHERE  invited_by_id = :invited_by_id
           AND  role = :role
-          AND  status = 'accepted'
-          AND  user_id IS NOT NULL
-        ORDER  BY accepted_at DESC NULLS LAST
+          AND  (CAST(:status AS text) IS NULL OR status = :status)
+        ORDER  BY accepted_at DESC NULLS LAST, id DESC
         LIMIT  :limit
     """
-    return await _rows(session, sql, {"sender_id": sender_id, "role": role, "limit": limit})
+    return await _rows(session, sql, {"invited_by_id": invited_by_id, "role": role,
+                                      "status": status_key, "limit": limit})
 
 
 # ── 6 · Invited-by (who invited this user) ────────────────────────────────────

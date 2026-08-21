@@ -54,7 +54,7 @@ class InvitesSummary(BaseModel):
 
 
 class InvitesSummaryResponse(BaseModel):
-    sender_id: int
+    invited_by_id: int
     summary: InvitesSummary
 
 
@@ -72,7 +72,7 @@ class InviteRow(BaseModel):
 
 
 class InvitesResponse(BaseModel):
-    sender_id: int
+    invited_by_id: int
     role: str | None = None
     status: str | None = None
     count: int = 0
@@ -90,7 +90,7 @@ class PersonRow(BaseModel):
 
 
 class PeopleResponse(BaseModel):
-    sender_id: int
+    invited_by_id: int
     role: str
     count: int = 0
     rows: list[PersonRow] = Field(default_factory=list)
