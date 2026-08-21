@@ -66,17 +66,17 @@ async def agent_listings(
 @router.get("/agent/invites/summary", response_model=InvitesSummaryResponse,
             summary="Invites summary (counts for the bar chart)")
 async def invites_summary(
-    user_id: int = Query(..., description="Logged-in agent's zipdata_customuser id (the sender)."),
+    invited_by_id: int = Query(..., description="Logged-in agent's zipdata_customuser id (the invite sender)."),
     db: AsyncSession = Depends(_db),
 ) -> InvitesSummaryResponse:
-    return await AgentService.invites_summary(db, user_id)
+    return await AgentService.invites_summary(db, invited_by_id)
 
 
 # ═══════════════════ 3 · INVITES — list (drill-down) ═════════════════════════
 @router.get("/agent/invites/", response_model=InvitesResponse,
             summary="Invited users (drill-down; filter by role/status)")
 async def invites(
-    user_id: int = Query(..., description="Logged-in agent's user id (the sender)."),
+    invited_by_id: int = Query(..., description="Logged-in agent's user id (the invite sender)."),
     role: str | None = Query(None, description="client | partner (omit for all)."),
     status_: str | None = Query(None, alias="status", description="pending | sent | accepted (omit for all)."),
     limit: int = Query(200, ge=1, le=1000),
@@ -88,7 +88,7 @@ async def invites(
     if status_ is not None and status_.lower() not in ALLOWED_INVITE_STATUS:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail=f"status must be one of {sorted(ALLOWED_INVITE_STATUS)}.")
-    return await AgentService.invites(db, user_id,
+    return await AgentService.invites(db, invited_by_id,
                                       role.lower() if role else None,
                                       status_.lower() if status_ else None, limit)
 
@@ -96,21 +96,21 @@ async def invites(
 # ═══════════════════════════ 4 · AGENT CLIENTS ═══════════════════════════════
 @router.get("/agent/clients/", response_model=PeopleResponse, summary="Agent clients (accepted)")
 async def agent_clients(
-    user_id: int = Query(..., description="Logged-in agent's user id (the sender)."),
+    invited_by_id: int = Query(..., description="Logged-in agent's user id (the invite sender)."),
     limit: int = Query(200, ge=1, le=1000),
     db: AsyncSession = Depends(_db),
 ) -> PeopleResponse:
-    return await AgentService.people_by_role(db, user_id, "client", limit)
+    return await AgentService.people_by_role(db, invited_by_id, "client", limit)
 
 
 # ═══════════════════════════ 5 · AGENT PARTNERS ══════════════════════════════
 @router.get("/agent/partners/", response_model=PeopleResponse, summary="Agent partners (accepted)")
 async def agent_partners(
-    user_id: int = Query(..., description="Logged-in agent's user id (the sender)."),
+    invited_by_id: int = Query(..., description="Logged-in agent's user id (the invite sender)."),
     limit: int = Query(200, ge=1, le=1000),
     db: AsyncSession = Depends(_db),
 ) -> PeopleResponse:
-    return await AgentService.people_by_role(db, user_id, "partner", limit)
+    return await AgentService.people_by_role(db, invited_by_id, "partner", limit)
 
 
 # ═══════════════════════════ 6 · INVITED-BY ══════════════════════════════════

@@ -86,38 +86,38 @@ class AgentService:
     # 3 · Invites summary (bar chart) ──────────────────────────────────────────
     @staticmethod
     @cached(agent_invites_summary_cache)
-    async def invites_summary(session: AsyncSession, sender_id) -> InvitesSummaryResponse:
-        rows = await repo.invites_summary(session, sender_id)
+    async def invites_summary(session: AsyncSession, invited_by_id) -> InvitesSummaryResponse:
+        rows = await repo.invites_summary(session, invited_by_id)
         r = rows[0] if rows else {}
         s = InvitesSummary(total=_i(r.get("total")), pending=_i(r.get("pending")),
                            sent=_i(r.get("sent")), accepted=_i(r.get("accepted")),
                            clients=_i(r.get("clients")), partners=_i(r.get("partners")))
-        return InvitesSummaryResponse(sender_id=sender_id, summary=s)
+        return InvitesSummaryResponse(invited_by_id=invited_by_id, summary=s)
 
     # 3 · Invites list (drill-down) ────────────────────────────────────────────
     @staticmethod
     @cached(agent_invites_cache)
-    async def invites(session: AsyncSession, sender_id, role, status_key, limit) -> InvitesResponse:
-        rows = await repo.invites(session, sender_id, role, status_key, limit)
+    async def invites(session: AsyncSession, invited_by_id, role, status_key, limit) -> InvitesResponse:
+        rows = await repo.invites(session, invited_by_id, role, status_key, limit)
         out = [InviteRow(invite_id=_i(r["invite_id"]), first_name=r.get("first_name"),
                          last_name=r.get("last_name"), email=r.get("email"),
                          phone_number=r.get("phone_number"), role=r.get("role"),
                          status=r.get("status"), invitation_kind=r.get("invitation_kind"),
                          accepted_at=r.get("accepted_at"),
                          user_id=(_i(r["user_id"]) if r["user_id"] is not None else None)) for r in rows]
-        return InvitesResponse(sender_id=sender_id, role=role, status=status_key,
+        return InvitesResponse(invited_by_id=invited_by_id, role=role, status=status_key,
                                count=len(out), rows=out)
 
     # 4 & 5 · Clients / Partners ───────────────────────────────────────────────
     @staticmethod
     @cached(agent_people_cache)
-    async def people_by_role(session: AsyncSession, sender_id, role, limit) -> PeopleResponse:
-        rows = await repo.people_by_role(session, sender_id, role, limit)
+    async def people_by_role(session: AsyncSession, invited_by_id, role, limit) -> PeopleResponse:
+        rows = await repo.people_by_role(session, invited_by_id, role, limit)
         out = [PersonRow(user_id=(_i(r["user_id"]) if r["user_id"] is not None else None),
                          first_name=r.get("first_name"), last_name=r.get("last_name"),
                          email=r.get("email"), phone_number=r.get("phone_number"),
                          joined_at=r.get("joined_at")) for r in rows]
-        return PeopleResponse(sender_id=sender_id, role=role, count=len(out), rows=out)
+        return PeopleResponse(invited_by_id=invited_by_id, role=role, count=len(out), rows=out)
 
     # 6 · Invited-by ───────────────────────────────────────────────────────────
     @staticmethod
