@@ -98,7 +98,7 @@ async def invites(session, invited_by_id, role, status_key, limit):
 # ── 4 & 5 · Clients / Partners (by role, dynamic status) ──────────────────────
 async def people_by_role(session, invited_by_id, role, status_key, limit):
     sql = """
-        SELECT user_id, first_name, last_name, email, phone_number,
+        SELECT user_id, first_name, last_name, email, phone_number,partner_category,
                status, accepted_at AS joined_at
         FROM   public.zipdata_temporaryaccount
         WHERE  invited_by_id = :invited_by_id
