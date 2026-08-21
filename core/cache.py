@@ -106,6 +106,14 @@ market_dom_breakdown_cache        = TTLCache(maxsize=256, ttl=900)   # Graph 5 d
 rate_current_cache = TTLCache(maxsize=8,  ttl=1800)
 rate_history_cache = TTLCache(maxsize=16, ttl=1800)
 
+#saller agent
+agent_profile_cache          = TTLCache(maxsize=512, ttl=900)
+agent_listings_cache         = TTLCache(maxsize=512, ttl=300)
+agent_invites_summary_cache  = TTLCache(maxsize=512, ttl=120)
+agent_invites_cache          = TTLCache(maxsize=512, ttl=120)
+agent_people_cache           = TTLCache(maxsize=512, ttl=120)
+agent_invited_by_cache       = TTLCache(maxsize=512, ttl=900)
+
 def make_cache_key(*args: Any, **kwargs: Any) -> str:
     """
     Build a deterministic, hashable cache key from arbitrary arguments.
