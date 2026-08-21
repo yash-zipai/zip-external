@@ -108,6 +108,20 @@ class InventoryResponse(BaseModel):
     scope: MarketScopeEcho
     points: list[InventoryPoint] = Field(default_factory=list)
 
+# ── Graph 4 drill-down · Price distribution (inventory by band) ────────────────
+class PriceBand(BaseModel):
+    band: str                       # e.g. "Under $2M"
+    min_price: float | None = None
+    max_price: float | None = None
+    homes: int = 0
+
+
+class PriceDistributionResponse(BaseModel):
+    scope: MarketScopeEcho
+    bands: list[PriceBand] = Field(default_factory=list)
+
+
+
 
 # ── Graph 5 · How fast homes sell ─────────────────────────────────────────────
 class SpeedToSellPoint(BaseModel):
@@ -121,6 +135,19 @@ class SpeedToSellPoint(BaseModel):
 class SpeedToSellResponse(BaseModel):
     scope: MarketScopeEcho
     points: list[SpeedToSellPoint] = Field(default_factory=list)
+
+
+# ── Graph 5 drill-down · DOM breakdown (speed buckets) ────────────────────────
+class DomBucket(BaseModel):
+    bucket: str                     # e.g. "Under 2 weeks"
+    dom_min: int | None = None
+    dom_max: int | None = None
+    homes: int = 0
+
+
+class DomBreakdownResponse(BaseModel):
+    scope: MarketScopeEcho
+    buckets: list[DomBucket] = Field(default_factory=list)
 
 
 # ── Shared drill-down: individual listings (any card's "See listings ->") ──────
@@ -145,3 +172,5 @@ class ListingsResponse(BaseModel):
     status: str
     count: int = 0
     rows: list[ListingRow] = Field(default_factory=list)
+
+
