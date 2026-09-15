@@ -14,31 +14,38 @@ from pydantic import BaseModel, Field
 
 
 class DQStatusResponse(BaseModel):
-    """One glance: is the data in step with the MLS, and is this page current."""
+    """One glance, in the order the question is usually asked: is the data
+    current, is it in step with the MLS, and only then how the checks did."""
 
-    has_gap: bool = Field(
-        description="True when the totals differ or any check is failing."
-    )
-    gap: int | None = Field(
-        default=None,
-        description="Homes at the MLS minus homes held here.",
-    )
-    checks_failing: int
-    checks_run: int
-
-    last_checked: datetime | None = Field(
-        default=None, description="When the checks last ran (UTC)."
-    )
-    hours_since_check: float | None = None
-    ran_today: bool = Field(
-        description="Whether the checks have run in the last 26 hours."
-    )
+    # -- the data --
     data_age_days: float | None = Field(
         default=None,
         description=(
             "How old the newest listing record is. Separate from ran_today: "
             "the checks running and the data being fresh are different things."
         ),
+    )
+    has_gap: bool = Field(
+        description="True when the totals differ or any check is failing."
+    )
+    mls_has: int | None = None
+    we_have: int | None = None
+    gap: int | None = Field(
+        default=None,
+        description="Homes at the MLS minus homes held here.",
+    )
+
+    # -- the checks --
+    checks_failing: int
+    checks_run: int
+
+    # -- when this was measured --
+    last_checked: datetime | None = Field(
+        default=None, description="When the checks last ran (UTC)."
+    )
+    hours_since_check: float | None = None
+    ran_today: bool = Field(
+        description="Whether the checks have run in the last 26 hours."
     )
 
 
@@ -88,6 +95,16 @@ class DQCheck(BaseModel):
     passed: bool
     listings_recorded: int = Field(
         description="How many listing keys this check recorded for drill-down."
+    )
+    repaired: int = Field(
+        description=(
+            "Listings from this check already put through the reconciliation "
+            "API. The check result is a photograph taken at run time, so "
+            "repairs made since will not show in `value` until the next run."
+        ),
+    )
+    outstanding: int = Field(
+        description="Listings from this check still waiting to be repaired."
     )
     value_a_week_ago: float | None = None
     direction: str = Field(
