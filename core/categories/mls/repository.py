@@ -91,7 +91,6 @@ CHECKS_SQL = text("""
         FROM admin.dq_check_result
         WHERE run_at < NOW() - INTERVAL '7 days'
         ORDER BY check_name, run_at DESC
-    )
     ),
     -- A check result is a photograph, not a live reading: once listings are
     -- repaired the stored count stays put until the next run. Counting the
