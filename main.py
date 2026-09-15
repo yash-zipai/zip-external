@@ -41,6 +41,9 @@ from core.categories.signal.market import market_router
 from core.categories.signal.rate import rate_router
 from core.categories.seller_agent import agent_router
 
+from core.categories.mls import router as mls_dq_router
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — dispose every per-schema engine on shutdown."""
@@ -100,6 +103,8 @@ def create_app() -> FastAPI:
 
     #agent
     app.include_router(agent_router, prefix="/v1")
+
+    app.include_router(mls_dq_router, prefix="/v1")
 
     return app
 
