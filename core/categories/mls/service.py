@@ -28,26 +28,30 @@ class DQService:
             # Nothing on record. Saying so plainly beats returning zeros,
             # which would read on screen as "everything is fine".
             return DQStatusResponse(
+                data_age_days=None,
                 has_gap=False,
+                mls_has=None,
+                we_have=None,
                 gap=None,
                 checks_failing=0,
                 checks_run=0,
                 last_checked=None,
                 hours_since_check=None,
                 ran_today=False,
-                data_age_days=None,
             )
 
         gap = row.get("gap")
         return DQStatusResponse(
+            data_age_days=row["data_age_days"],
             has_gap=bool(gap) or row["checks_failing"] > 0,
+            mls_has=row["mls_has"],
+            we_have=row["we_have"],
             gap=gap,
             checks_failing=row["checks_failing"],
             checks_run=row["checks_run"],
             last_checked=row["last_checked"],
             hours_since_check=row["hours_since_check"],
             ran_today=row["ran_today"],
-            data_age_days=row["data_age_days"],
         )
 
     @staticmethod
@@ -92,6 +96,8 @@ class DQService:
                 threshold=r["threshold"],
                 passed=r["passed"],
                 listings_recorded=r["listings_recorded"],
+                repaired=r["repaired"],
+                outstanding=r["outstanding"],
                 value_a_week_ago=r["value_a_week_ago"],
                 direction=r["direction"],
             )

@@ -27,14 +27,21 @@ STATUS_SQL = text("""
         SELECT MAX(run_at) AS run_at FROM admin.dq_check_result
     )
     SELECT
+        -- The data first: how old it is, and how far off the MLS.
+        (SELECT value FROM latest WHERE check_name = 'data_age_days') AS data_age_days,
+        (SELECT (breakdown->>'mls_has')::bigint
+           FROM latest WHERE check_name = 'reconciliation_total')  AS mls_has,
+        (SELECT (breakdown->>'we_have')::bigint
+           FROM latest WHERE check_name = 'reconciliation_total')  AS we_have,
         (SELECT (breakdown->>'difference')::bigint
            FROM latest WHERE check_name = 'reconciliation_total')  AS gap,
+        -- Then the checks.
         (SELECT COUNT(*) FROM latest WHERE NOT passed)             AS checks_failing,
         (SELECT COUNT(*) FROM latest)                              AS checks_run,
+        -- And when this was all measured.
         r.run_at                                                   AS last_checked,
         ROUND(EXTRACT(EPOCH FROM (NOW() - r.run_at)) / 3600, 1)    AS hours_since_check,
-        r.run_at > NOW() - INTERVAL '26 hours'                     AS ran_today,
-        (SELECT value FROM latest WHERE check_name = 'data_age_days') AS data_age_days
+        r.run_at > NOW() - INTERVAL '26 hours'                     AS ran_today
     FROM last_run r
 """)
 
@@ -85,9 +92,23 @@ CHECKS_SQL = text("""
         WHERE run_at < NOW() - INTERVAL '7 days'
         ORDER BY check_name, run_at DESC
     )
+    ),
+    -- A check result is a photograph, not a live reading: once listings are
+    -- repaired the stored count stays put until the next run. Counting the
+    -- repair queue alongside it keeps the page honest between runs.
+    repairs AS (
+        SELECT found_by,
+               COUNT(*) FILTER (
+                   WHERE result IN ('updated', 'created', 'filed')) AS repaired,
+               COUNT(*) FILTER (WHERE attempted_at IS NULL)         AS outstanding
+        FROM admin.dq_action_queue
+        GROUP BY found_by
+    )
     SELECT
         l.check_name, l.label, l.severity_level, l.fix_window,
         l.value, l.threshold, l.passed, l.listings_recorded, l.run_at,
+        COALESCE(rp.repaired, 0)    AS repaired,
+        COALESCE(rp.outstanding, 0) AS outstanding,
         w.value AS value_a_week_ago,
         -- Direction decides whether anyone acts today. A number is a fact;
         -- a rising number is a decision.
@@ -99,6 +120,7 @@ CHECKS_SQL = text("""
         END AS direction
     FROM latest l
     LEFT JOIN week_ago w USING (check_name)
+    LEFT JOIN repairs rp ON rp.found_by = l.check_name
     ORDER BY l.passed, l.severity_level, l.value DESC
 """)
 
