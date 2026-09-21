@@ -285,7 +285,7 @@ LABEL_SQL = text("""
 """)
 
 
-class DQRepository:
+class MLSRepository:
     """Reads the stored results of the data quality checks."""
 
     @staticmethod
