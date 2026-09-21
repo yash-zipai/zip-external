@@ -6,13 +6,13 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.categories.mls.repository import DQRepository
+from core.categories.mls.repository import MLSRepository
 from core.categories.mls.schemas import (
     AffectedListing,
     CheckListingsResponse,
-    DQCheck,
-    DQChecksResponse,
-    DQStatusResponse,
+    MLSCheck,
+    MLSChecksResponse,
+    MLSStatusResponse,
     SourceTargetResponse,
     StatusBreakdownResponse,
     StatusRow,
@@ -46,17 +46,17 @@ def _sync_status(gap, outstanding, last_repair_at) -> str:
     return "in_progress" if now - last_repair_at < timedelta(hours=24) else "stalled"
 
 
-class DQService:
+class MLSService:
     """Serves the stored results of the data quality checks."""
 
     @staticmethod
-    async def get_status(session: AsyncSession) -> DQStatusResponse:
-        row = await DQRepository.fetch_status(session)
+    async def get_status(session: AsyncSession) -> MLSStatusResponse:
+        row = await MLSRepository.fetch_status(session)
 
         if not row or row.get("last_checked") is None:
             # Nothing on record. Saying so plainly beats returning zeros,
             # which would read on screen as "everything is fine".
-            return DQStatusResponse(
+            return MLSStatusResponse(
                 data_age_days=None,
                 has_gap=False,
                 mls_has=None,
@@ -76,7 +76,7 @@ class DQService:
         gap = row.get("gap")
         outstanding = row.get("repairs_outstanding") or 0
 
-        return DQStatusResponse(
+        return MLSStatusResponse(
             data_age_days=row["data_age_days"],
             has_gap=bool(gap) or row["checks_failing"] > 0,
             mls_has=row["mls_has"],
@@ -95,11 +95,11 @@ class DQService:
 
     @staticmethod
     async def get_source_target(session: AsyncSession) -> SourceTargetResponse:
-        row = await DQRepository.fetch_source_target(session)
+        row = await MLSRepository.fetch_source_target(session)
         if not row:
             return SourceTargetResponse()
 
-        status_row = await DQRepository.fetch_status(session) or {}
+        status_row = await MLSRepository.fetch_status(session) or {}
         outstanding = status_row.get("repairs_outstanding") or 0
 
         return SourceTargetResponse(
@@ -114,7 +114,7 @@ class DQService:
 
     @staticmethod
     async def get_status_breakdown(session: AsyncSession) -> StatusBreakdownResponse:
-        rows = await DQRepository.fetch_status_breakdown(session)
+        rows = await MLSRepository.fetch_status_breakdown(session)
 
         items = [
             StatusRow(
@@ -129,17 +129,17 @@ class DQService:
 
         return StatusBreakdownResponse(
             checked_at=rows[0]["checked_at"] if rows else None,
-            repairs_since_check=await DQRepository.fetch_repairs_since_check(session),
+            repairs_since_check=await MLSRepository.fetch_repairs_since_check(session),
             total=len(items),
             items=items,
         )
 
     @staticmethod
-    async def get_checks(session: AsyncSession) -> DQChecksResponse:
-        rows = await DQRepository.fetch_checks(session)
+    async def get_checks(session: AsyncSession) -> MLSChecksResponse:
+        rows = await MLSRepository.fetch_checks(session)
 
         items = [
-            DQCheck(
+            MLSCheck(
                 check_name=r["check_name"],
                 label=r["label"],
                 severity_level=r["severity_level"],
@@ -156,7 +156,7 @@ class DQService:
             for r in rows
         ]
 
-        return DQChecksResponse(
+        return MLSChecksResponse(
             checked_at=rows[0]["run_at"] if rows else None,
             total=len(items),
             failing=sum(1 for i in items if not i.passed),
@@ -171,11 +171,11 @@ class DQService:
         offset: int = 0,
         include_repaired: bool = False,
     ) -> CheckListingsResponse:
-        rows = await DQRepository.fetch_listings(
+        rows = await MLSRepository.fetch_listings(
             session, check_name, limit, offset, include_repaired
         )
-        label = await DQRepository.fetch_label(session, check_name)
-        counts = await DQRepository.fetch_listing_counts(session, check_name)
+        label = await MLSRepository.fetch_label(session, check_name)
+        counts = await MLSRepository.fetch_listing_counts(session, check_name)
 
         # The three counts are reported beside the list rather than folded
         # into one number: "39 outstanding of 72 flagged" says something
