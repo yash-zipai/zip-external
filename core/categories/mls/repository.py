@@ -45,6 +45,17 @@ STATUS_SQL = text("""
         (SELECT MAX(modification_timestamp) AT TIME ZONE 'America/Los_Angeles'
            FROM zipdata_idxlisting)                                AS zipai_as_of,
 
+        -- Full-size photos, MLS against ours. Same shape as the listing
+        -- totals, read from the photo reconciliation check.
+        (SELECT (breakdown->>'mls_has')::bigint
+           FROM latest WHERE check_name = 'photo_reconciliation_total') AS photos_mls,
+        (SELECT (breakdown->>'we_have')::bigint
+           FROM latest WHERE check_name = 'photo_reconciliation_total') AS photos_ours,
+        (SELECT (breakdown->>'difference')::bigint
+           FROM latest WHERE check_name = 'photo_reconciliation_total') AS photos_gap,
+        (SELECT run_at AT TIME ZONE 'America/Los_Angeles'
+           FROM latest WHERE check_name = 'photo_reconciliation_total') AS photos_as_of,
+
         -- Only repairs that bring in missing listings can close the total gap.
         -- A duplicate-address report, say, is real work but leaves the count
         -- where it was, so it should not make the gap look "in progress".

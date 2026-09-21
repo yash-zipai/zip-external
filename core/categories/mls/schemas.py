@@ -38,6 +38,21 @@ class MLSStatusResponse(BaseModel):
         default=None,
         description="Newest listing record we hold (Pacific time).",
     )
+
+    # -- photos --
+    photos_mls: int | None = Field(
+        default=None, description="Full-size photos at the MLS."
+    )
+    photos_ours: int | None = Field(
+        default=None,
+        description="Full-size photos held here. Thumbnails are not counted.",
+    )
+    photos_gap: int | None = Field(
+        default=None, description="Photos at the MLS minus photos held here."
+    )
+    photos_as_of: datetime | None = Field(
+        default=None, description="When the photo totals were taken (Pacific time)."
+    )
     gap: int | None = Field(
         default=None,
         description="Homes at the MLS minus homes held here.",
