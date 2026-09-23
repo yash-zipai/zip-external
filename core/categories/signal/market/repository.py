@@ -8,6 +8,7 @@ a fixed whitelist (injection-safe). Queries match the frontend SQL 1:1
 """
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from sqlalchemy import text
@@ -23,41 +24,48 @@ def _area_col(area_level: str) -> str:
         raise ValueError(f"Unsupported area_level '{area_level}'. Use county | city | zip.")
 
 
+def _window_start(months: int) -> date:
+    """First day of the month (months - 1) before the current one.
+
+    months=1 -> start of this month; months=24 -> this month plus the 23 before it.
+    Computed here (not with now() in SQL) so it binds as a plain date the planner
+    can use as an index range bound.
+    """
+    today = date.today()
+    y, m = divmod(today.year * 12 + (today.month - 1) - (months - 1), 12)
+    return date(y, m + 1, 1)
+
+
 async def _rows(session: AsyncSession, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
     result = await session.execute(text(sql), params)
     return [dict(r._mapping) for r in result.fetchall()]
 
 
-# ── Graph 1 · HOME PRICE TREND (median sale price) ────────────────────────────
-async def home_price_trend(session, area_level, area_code, property_type):
+# ── Graph 1 + Graph 3 · CLOSED SALES PER MONTH (shared) ───────────────────────
+#  One scan of the area's closed sales feeds three charts: home-price-trend
+#  (median_sale_price, sample_size), homes-sold (sample_size) and value-per-sqft
+#  (median_ppsf, ppsf_sample_size — only sales with living_sqft > 0; months with
+#  none are dropped by the service, as the old per-chart WHERE did).
+async def closed_monthly(session, area_level, area_code, property_type, months):
     col = _area_col(area_level)
     sql = f"""
         SELECT date_trunc('month', close_date)::date AS month,
                percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price) AS median_sale_price,
-               count(*) AS sample_size
+               count(*) AS sample_size,
+               round((percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price/NULLIF(living_sqft,0))
+                      FILTER (WHERE living_sqft > 0))::numeric,0) AS median_ppsf,
+               count(*) FILTER (WHERE living_sqft > 0) AS ppsf_sample_size
         FROM   signal.listing_fact
         WHERE  standard_status = 'Closed' AND property_type = :ptype AND {col} = :area
+          AND  close_date >= :start
         GROUP  BY 1 ORDER BY 1
     """
-    return await _rows(session, sql, {"ptype": property_type, "area": area_code})
-
-
-# ── Graph 1 · VALUE PER SQ FT (median $/sqft) ─────────────────────────────────
-async def value_per_sqft(session, area_level, area_code, property_type):
-    col = _area_col(area_level)
-    sql = f"""
-        SELECT date_trunc('month', close_date)::date AS month,
-               round(percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price/NULLIF(living_sqft,0))::numeric,0) AS median_ppsf,
-               count(*) AS sample_size
-        FROM   signal.listing_fact
-        WHERE  standard_status = 'Closed' AND property_type = :ptype AND {col} = :area AND living_sqft > 0
-        GROUP  BY 1 ORDER BY 1
-    """
-    return await _rows(session, sql, {"ptype": property_type, "area": area_code})
+    return await _rows(session, sql, {"ptype": property_type, "area": area_code,
+                                      "start": _window_start(months)})
 
 
 # ── Graph 2 · PRICE DROP PRESSURE (Negotiating room) ──────────────────────────
-async def price_drop_pressure(session, area_level, area_code, property_type):
+async def price_drop_pressure(session, area_level, area_code, property_type, months):
     col = _area_col(area_level)
     sql = f"""
         SELECT month,
@@ -65,10 +73,11 @@ async def price_drop_pressure(session, area_level, area_code, property_type):
                count(*) FILTER (WHERE kind='new_listing') AS new_listings,
                round(100.0*count(*) FILTER (WHERE kind='price_drop')/NULLIF(count(*) FILTER (WHERE kind='new_listing'),0),1) AS drops_per_100_new
         FROM   signal.market_event
-        WHERE  {col} = :area AND property_type = :ptype
+        WHERE  {col} = :area AND property_type = :ptype AND month >= :start
         GROUP  BY month ORDER BY month
     """
-    return await _rows(session, sql, {"area": area_code, "ptype": property_type})
+    return await _rows(session, sql, {"area": area_code, "ptype": property_type,
+                                      "start": _window_start(months)})
 
 
 # ── Graph 2 drill-down · PRICE CUTS (individual cut events) ────────────────────
@@ -86,57 +95,68 @@ async def price_cuts(session, area_level, area_code, property_type, year, month,
         WHERE  me.kind = 'price_drop' AND me.{col} = :area AND me.property_type = :ptype
           AND  (CAST(:year  AS int) IS NULL OR EXTRACT(YEAR  FROM me.event_date) = :year)
           AND  (CAST(:month AS int) IS NULL OR EXTRACT(MONTH FROM me.event_date) = :month)
-        ORDER  BY me.event_date DESC, cut_amount DESC
+        ORDER  BY me.event_date DESC, cut_amount DESC, me.src_event_id  -- PK tie-break: stable order
     """
     return await _rows(session, sql, {"area": area_code, "ptype": property_type,
                                       "year": year, "month": month})
 
 
 # ── Graph 3 · FRESH SUPPLY (new listings, SF vs Condo) ────────────────────────
-async def fresh_supply(session, area_level, area_code):
+async def fresh_supply(session, area_level, area_code, months):
     col = _area_col(area_level)
     sql = f"""
         SELECT date_trunc('month', list_date)::date AS month, property_type, count(*) AS new_listings
         FROM   signal.listing_fact
-        WHERE  list_date IS NOT NULL AND property_type IN ('SF','CONDO') AND {col} = :area
+        WHERE  list_date >= :start AND property_type IN ('SF','CONDO') AND {col} = :area
         GROUP  BY 1,2 ORDER BY 1,2
     """
-    return await _rows(session, sql, {"area": area_code})
-
-
-# ── Graph 3 · HOMES SOLD (closed sales per month) ─────────────────────────────
-async def homes_sold(session, area_level, area_code, property_type):
-    col = _area_col(area_level)
-    sql = f"""
-        SELECT date_trunc('month', close_date)::date AS month, count(*) AS closed_sales
-        FROM   signal.listing_fact
-        WHERE  standard_status = 'Closed' AND property_type = :ptype AND {col} = :area
-        GROUP  BY 1 ORDER BY 1
-    """
-    return await _rows(session, sql, {"ptype": property_type, "area": area_code})
+    return await _rows(session, sql, {"area": area_code, "start": _window_start(months)})
 
 
 # ── Graph 4 · AVAILABLE INVENTORY (active & in-contract) ──────────────────────
-async def available_inventory(session, area_level, area_code, property_type):
+#  A listing is "active" at a month-end if list_date <= month_end < COALESCE(pending_date,
+#  close_date), and "in contract" if pending_date <= month_end < close_date. Rather than
+#  test every listing against every month (months x listings), each listing emits a +1 in
+#  the month its interval opens and a -1 in the month it closes; a running sum over months
+#  then gives the count at each month-end. The close month is clamped to >= the open month
+#  so bad data (pending before list) nets to zero, exactly as the interval test would.
+async def available_inventory(session, area_level, area_code, property_type, months):
     col = _area_col(area_level)
     sql = f"""
-        WITH months AS (
-            SELECT generate_series(date '2020-01-01', date_trunc('month', now()), interval '1 month')::date AS m
+        WITH f AS (
+            SELECT date_trunc('month', list_date)::date                           AS list_m,
+                   date_trunc('month', COALESCE(pending_date, close_date))::date  AS off_m,
+                   date_trunc('month', pending_date)::date                        AS pend_m,
+                   date_trunc('month', close_date)::date                          AS close_m
+            FROM   signal.listing_fact
+            WHERE  {col} = :area AND property_type = :ptype
+        ),
+        deltas AS (
+            SELECT list_m AS m, 1 AS active, 0 AS in_contract FROM f WHERE list_m IS NOT NULL
+            UNION ALL
+            SELECT GREATEST(off_m, list_m), -1, 0 FROM f WHERE list_m IS NOT NULL AND off_m IS NOT NULL
+            UNION ALL
+            SELECT pend_m, 0, 1 FROM f WHERE pend_m IS NOT NULL
+            UNION ALL
+            SELECT GREATEST(close_m, pend_m), 0, -1 FROM f WHERE pend_m IS NOT NULL AND close_m IS NOT NULL
+            UNION ALL
+            SELECT generate_series(GREATEST(date '2020-01-01', :start), date_trunc('month', now()), interval '1 month')::date, 0, 0
+        ),
+        running AS (
+            SELECT m,
+                   sum(sum(active))      OVER (ORDER BY m) AS active_listings,
+                   sum(sum(in_contract)) OVER (ORDER BY m) AS in_contract
+            FROM   deltas
+            GROUP  BY m
         )
-        SELECT mo.m AS month,
-               count(*) FILTER (
-                   WHERE f.list_date <= (mo.m + interval '1 month - 1 day')
-                     AND COALESCE(f.pending_date,f.close_date,date '2999-01-01') > (mo.m + interval '1 month - 1 day')
-               ) AS active_listings,
-               count(*) FILTER (
-                   WHERE f.pending_date <= (mo.m + interval '1 month - 1 day')
-                     AND COALESCE(f.close_date,date '2999-01-01') > (mo.m + interval '1 month - 1 day')
-               ) AS in_contract
-        FROM   months mo
-        JOIN   signal.listing_fact f ON f.{col} = :area AND f.property_type = :ptype
-        GROUP  BY mo.m ORDER BY mo.m
+        SELECT m AS month, active_listings::bigint AS active_listings, in_contract::bigint AS in_contract
+        FROM   running
+        WHERE  m BETWEEN GREATEST(date '2020-01-01', :start) AND date_trunc('month', now())
+          AND  EXISTS (SELECT 1 FROM f)
+        ORDER  BY m
     """
-    return await _rows(session, sql, {"area": area_code, "ptype": property_type})
+    return await _rows(session, sql, {"area": area_code, "ptype": property_type,
+                                      "start": _window_start(months)})
 
 # ── Graph 4 drill-down · PRICE DISTRIBUTION (available inventory by price band) ─
 #  Active listings grouped into price bands. Click a band -> listings(status=active,
@@ -182,7 +202,7 @@ async def price_distribution(session, area_level, area_code, property_type):
 
 
 # ── Graph 5 · SPEED TO SELL (median DOM, SF vs Condo) ─────────────────────────
-async def speed_to_sell(session, area_level, area_code):
+async def speed_to_sell(session, area_level, area_code, months):
     col = _area_col(area_level)
     sql = f"""
         SELECT date_trunc('month', close_date)::date AS month, property_type,
@@ -191,9 +211,10 @@ async def speed_to_sell(session, area_level, area_code):
         FROM   signal.listing_fact
         WHERE  standard_status = 'Closed' AND property_type IN ('SF','CONDO') AND {col} = :area
           AND  COALESCE(dom_reported,(pending_date-list_date)) IS NOT NULL
+          AND  close_date >= :start
         GROUP  BY 1,2 ORDER BY 1,2
     """
-    return await _rows(session, sql, {"area": area_code})
+    return await _rows(session, sql, {"area": area_code, "start": _window_start(months)})
 
 # ── Graph 5 drill-down · DOM BREAKDOWN (speed buckets) ─────────────────────────
 #  Closed sales grouped into days-on-market buckets. Click a bucket -> listings
@@ -294,7 +315,8 @@ async def listings(session, area_level, area_code, property_type, status_key, ye
                 OR COALESCE(f.dom_reported, (f.close_date - f.list_date)) >= :dom_min)
           AND  (CAST(:dom_max AS int) IS NULL
                 OR COALESCE(f.dom_reported, (f.close_date - f.list_date)) <= :dom_max)
-        ORDER  BY COALESCE(ev.event_date, f.close_date, f.list_date) DESC NULLS LAST
+        ORDER  BY COALESCE(ev.event_date, f.close_date, f.list_date) DESC NULLS LAST,
+               f.listing_key_numeric  -- PK tie-break: same rows, same order, every call
         LIMIT  :limit
     """
     return await _rows(session, sql, {"area": area_code, "ptype": property_type,

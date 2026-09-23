@@ -10,6 +10,7 @@ Upgrade path: swap ``cachetools.TTLCache`` for a Redis-backed cache
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import hashlib
 import json
@@ -90,17 +91,22 @@ audit_new_listings_summary_cache = TTLCache(maxsize=16, ttl=60)
 
 
 #market  (MLS market-analysis charts — signal.listing_fact)
-market_home_price_trend_cache     = TTLCache(maxsize=256, ttl=900)
-market_value_per_sqft_cache       = TTLCache(maxsize=256, ttl=900)
-market_price_drop_pressure_cache  = TTLCache(maxsize=256, ttl=900)
+# signal.* only changes when the external MLS loader runs (at most daily — see
+# signal.load_state), so trend charts keep for an hour: a cold cache is the slow
+# path, and 15 min bought no freshness. Drill-downs keep their shorter TTLs.
+MARKET_TREND_TTL = 3600
+market_home_price_trend_cache     = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
+market_value_per_sqft_cache       = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
+market_price_drop_pressure_cache  = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
 market_price_cuts_cache           = TTLCache(maxsize=256, ttl=300)   # drill-down, shorter TTL
-market_fresh_supply_cache         = TTLCache(maxsize=256, ttl=900)
-market_homes_sold_cache           = TTLCache(maxsize=256, ttl=900)
-market_inventory_cache            = TTLCache(maxsize=256, ttl=900)
-market_speed_to_sell_cache        = TTLCache(maxsize=256, ttl=900)
+market_fresh_supply_cache         = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
+market_homes_sold_cache           = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
+market_inventory_cache            = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
+market_speed_to_sell_cache        = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
 market_listings_cache             = TTLCache(maxsize=256, ttl=300)   # drill-down, shorter TTL
 market_price_distribution_cache   = TTLCache(maxsize=256, ttl=900)   # Graph 4 drill-down
 market_dom_breakdown_cache        = TTLCache(maxsize=256, ttl=900)   # Graph 5 drill-down
+market_closed_monthly_cache       = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)   # shared by price trend / $/sqft / homes sold
 
 #rate  (Freddie Mac mortgage rates)
 rate_current_cache = TTLCache(maxsize=8,  ttl=1800)
@@ -135,34 +141,60 @@ def cached(cache_instance: TTLCache) -> Callable:
         async def get_top_places(session, zipcode, ...):
             ...
 
-    The first positional argument (``session``) is excluded from the cache
-    key because DB sessions are ephemeral and not hashable.
+    The DB session is excluded from the cache key because sessions are
+    ephemeral — whether it is passed as the first positional argument or as
+    ``session=``.
+
+    Concurrent misses for the same key are coalesced: the first caller runs
+    the query and every other caller awaits that same result instead of
+    issuing a duplicate query (e.g. the Signals feed and rail both asking for
+    ``available-inventory`` at the same moment).
     """
 
     def decorator(func: Callable) -> Callable:
+        # key -> Future of the call currently computing that key (per event loop / worker)
+        inflight: dict[str, asyncio.Future] = {}
+
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            # Skip the first arg (session) for the cache key
-            key = make_cache_key(*args[1:], **kwargs)
+            if "session" in kwargs:
+                key_kwargs = {k: v for k, v in kwargs.items() if k != "session"}
+                key = make_cache_key(*args, **key_kwargs)
+            else:
+                # Skip the first arg (session) for the cache key
+                key = make_cache_key(*args[1:], **kwargs)
 
             if key in cache_instance:
-                # logger.debug(
-                #     "cache_hit",
-                #     func=func.__name__,
-                #     key_prefix=key[:12],
-                # )
                 return cache_instance[key]
 
-            result = await func(*args, **kwargs)
-            cache_instance[key] = result
+            pending = inflight.get(key)
+            if pending is not None:
+                try:
+                    return await asyncio.shield(pending)
+                except asyncio.CancelledError:
+                    if pending.cancelled():
+                        # The leading request was cancelled (client went away);
+                        # compute it ourselves with our own session.
+                        return await wrapper(*args, **kwargs)
+                    raise
 
-            # logger.debug(
-            #     "cache_miss",
-            #     func=func.__name__,
-            #     key_prefix=key[:12],
-            #     cache_size=len(cache_instance),
-            # )
-            return result
+            fut: asyncio.Future = asyncio.get_running_loop().create_future()
+            inflight[key] = fut
+            try:
+                result = await func(*args, **kwargs)
+            except asyncio.CancelledError:
+                fut.cancel()
+                raise
+            except BaseException as exc:
+                fut.set_exception(exc)
+                fut.exception()  # mark retrieved: no "never retrieved" warning if nobody waited
+                raise
+            else:
+                cache_instance[key] = result
+                fut.set_result(result)
+                return result
+            finally:
+                inflight.pop(key, None)
 
         # Expose a way to manually clear the cache
         wrapper.cache = cache_instance  # type: ignore[attr-defined]
