@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # ── Application ───────────────────────────────────────────────────────────
     app_env: str = Field(default="development", description="Runtime environment")
-    service_name: str = Field(default="zipai-rag", description="Service identifier for logs")
+    service_name: str = Field(default="zipai-external-api", description="Service identifier for logs")
     log_level: str = Field(default="debug", description="Logging level: debug|info|warning|error")
 
     # ── Database ──────────────────────────────────────────────────────────────
