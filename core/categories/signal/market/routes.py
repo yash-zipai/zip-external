@@ -35,6 +35,10 @@ ALLOWED_STATUS = {"active", "pending", "sold", "new"}
 
 # Public-display defaults (change here if policy differs):
 ONLY_PUBLIC_DEFAULT = True     # honour IDX internet_list = TRUE on drill-downs
+# Trend charts return the trailing N months. ZipData's Signals feed plots the last 13
+# (MONTHLY_CHART_POINTS); 24 leaves room for year-over-year. Pass months=600 for full history.
+DEFAULT_TREND_MONTHS = 24
+MAX_TREND_MONTHS = 600
 
 
 @dataclass(frozen=True)
@@ -56,6 +60,12 @@ def market_scope(
     return MarketScope(area_level=lvl, area_code=val)
 
 
+def months_param(months: int = Query(DEFAULT_TREND_MONTHS, ge=1, le=MAX_TREND_MONTHS,
+                                     description="Trailing months to return, including the current month "
+                                                 f"(default {DEFAULT_TREND_MONTHS}; max {MAX_TREND_MONTHS}).")) -> int:
+    return months
+
+
 def ptype_param(ptype: str = Query("SF", description="SF | CONDO | ...")) -> str:
     p = ptype.upper()
     if p not in ALLOWED_PTYPES:
@@ -68,23 +78,26 @@ def ptype_param(ptype: str = Query("SF", description="SF | CONDO | ...")) -> str
 @router.get("/market/home-price-trend/", response_model=HomePriceTrendResponse, summary="Home Price Trend")
 async def home_price_trend(scope: MarketScope = Depends(market_scope),
                            ptype: str = Depends(ptype_param),
+                           months: int = Depends(months_param),
                            db: AsyncSession = Depends(_db)) -> HomePriceTrendResponse:
-    return await MarketService.home_price_trend(db, scope.area_level, scope.area_code, ptype)
+    return await MarketService.home_price_trend(db, scope.area_level, scope.area_code, ptype, months)
 
 
 @router.get("/market/value-per-sqft/", response_model=ValuePerSqftResponse, summary="Value per Sq Ft")
 async def value_per_sqft(scope: MarketScope = Depends(market_scope),
                          ptype: str = Depends(ptype_param),
+                         months: int = Depends(months_param),
                          db: AsyncSession = Depends(_db)) -> ValuePerSqftResponse:
-    return await MarketService.value_per_sqft(db, scope.area_level, scope.area_code, ptype)
+    return await MarketService.value_per_sqft(db, scope.area_level, scope.area_code, ptype, months)
 
 
 # ═══════════════════════ GRAPH 2 · NEGOTIATING ROOM ══════════════════════════
 @router.get("/market/price-drop-pressure/", response_model=PriceDropPressureResponse, summary="Negotiating Room")
 async def price_drop_pressure(scope: MarketScope = Depends(market_scope),
                               ptype: str = Depends(ptype_param),
+                              months: int = Depends(months_param),
                               db: AsyncSession = Depends(_db)) -> PriceDropPressureResponse:
-    return await MarketService.price_drop_pressure(db, scope.area_level, scope.area_code, ptype)
+    return await MarketService.price_drop_pressure(db, scope.area_level, scope.area_code, ptype, months)
 
 
 @router.get("/market/price-cuts/", response_model=PriceCutsResponse, summary="Negotiating Room — cut details (drill-down)")
@@ -99,23 +112,26 @@ async def price_cuts(scope: MarketScope = Depends(market_scope),
 # ═══════════════════════ GRAPH 3 · SUPPLY & DEMAND ═══════════════════════════
 @router.get("/market/fresh-supply/", response_model=FreshSupplyResponse, summary="Fresh Supply")
 async def fresh_supply(scope: MarketScope = Depends(market_scope),
+                       months: int = Depends(months_param),
                        db: AsyncSession = Depends(_db)) -> FreshSupplyResponse:
-    return await MarketService.fresh_supply(db, scope.area_level, scope.area_code)
+    return await MarketService.fresh_supply(db, scope.area_level, scope.area_code, months)
 
 
 @router.get("/market/homes-sold/", response_model=HomesSoldResponse, summary="Homes Sold")
 async def homes_sold(scope: MarketScope = Depends(market_scope),
                      ptype: str = Depends(ptype_param),
+                     months: int = Depends(months_param),
                      db: AsyncSession = Depends(_db)) -> HomesSoldResponse:
-    return await MarketService.homes_sold(db, scope.area_level, scope.area_code, ptype)
+    return await MarketService.homes_sold(db, scope.area_level, scope.area_code, ptype, months)
 
 
 # ═══════════════════════ GRAPH 4 · WHAT IS AVAILABLE ═════════════════════════
 @router.get("/market/available-inventory/", response_model=InventoryResponse, summary="What is Available")
 async def available_inventory(scope: MarketScope = Depends(market_scope),
                               ptype: str = Depends(ptype_param),
+                              months: int = Depends(months_param),
                               db: AsyncSession = Depends(_db)) -> InventoryResponse:
-    return await MarketService.available_inventory(db, scope.area_level, scope.area_code, ptype)
+    return await MarketService.available_inventory(db, scope.area_level, scope.area_code, ptype, months)
 
 
 # ═══════════ GRAPH 4 drill-down · PRICE DISTRIBUTION (inventory by band) ═══════
@@ -130,8 +146,9 @@ async def price_distribution(scope: MarketScope = Depends(market_scope),
 # ═══════════════════════ GRAPH 5 · HOW FAST HOMES SELL ═══════════════════════
 @router.get("/market/speed-to-sell/", response_model=SpeedToSellResponse, summary="How Fast Homes Sell")
 async def speed_to_sell(scope: MarketScope = Depends(market_scope),
+                        months: int = Depends(months_param),
                         db: AsyncSession = Depends(_db)) -> SpeedToSellResponse:
-    return await MarketService.speed_to_sell(db, scope.area_level, scope.area_code)
+    return await MarketService.speed_to_sell(db, scope.area_level, scope.area_code, months)
 
 
 # ═══════════ GRAPH 5 drill-down · DOM BREAKDOWN (speed buckets) ═══════════════

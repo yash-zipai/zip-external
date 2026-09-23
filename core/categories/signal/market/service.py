@@ -21,6 +21,7 @@ from core.cache import (
     market_listings_cache,
     market_price_distribution_cache,
     market_dom_breakdown_cache,
+    market_closed_monthly_cache,
 )
 from . import repository as repo
 from .schemas import (
@@ -75,13 +76,23 @@ def _scope(area_level, area_code, ptype=None) -> MarketScopeEcho:
     return MarketScopeEcho(area_level=area_level, area_code=area_code, property_type=ptype)
 
 
+@cached(market_closed_monthly_cache)
+async def _closed_monthly(session: AsyncSession, area_level, area_code, ptype, months):
+    """Shared closed-sales rows behind home-price-trend, value-per-sqft and homes-sold.
+
+    Cached (and in-flight coalesced) on its own, so the three charts requested
+    together for one area/ptype cost a single scan.
+    """
+    return await repo.closed_monthly(session, area_level, area_code, ptype, months)
+
+
 class MarketService:
 
     # Graph 1 · Prices ────────────────────────────────────────────────────────
     @staticmethod
     @cached(market_home_price_trend_cache)
-    async def home_price_trend(session: AsyncSession, area_level, area_code, ptype) -> HomePriceTrendResponse:
-        rows = await repo.home_price_trend(session, area_level, area_code, ptype)
+    async def home_price_trend(session: AsyncSession, area_level, area_code, ptype, months) -> HomePriceTrendResponse:
+        rows = await _closed_monthly(session, area_level, area_code, ptype, months)
         pts = []
         for r in rows:
             n = _i(r["sample_size"])
@@ -91,11 +102,13 @@ class MarketService:
 
     @staticmethod
     @cached(market_value_per_sqft_cache)
-    async def value_per_sqft(session: AsyncSession, area_level, area_code, ptype) -> ValuePerSqftResponse:
-        rows = await repo.value_per_sqft(session, area_level, area_code, ptype)
+    async def value_per_sqft(session: AsyncSession, area_level, area_code, ptype, months) -> ValuePerSqftResponse:
+        rows = await _closed_monthly(session, area_level, area_code, ptype, months)
         pts = []
         for r in rows:
-            n = _i(r["sample_size"])
+            n = _i(r["ppsf_sample_size"])
+            if n == 0:
+                continue  # no sale with living_sqft > 0 this month — the chart never had this point
             pts.append(ValuePerSqftPoint(month=r["month"], median_ppsf=_f(r["median_ppsf"]),
                                          sample_size=n, low_confidence=n < LOW_CONFIDENCE_MIN))
         return ValuePerSqftResponse(scope=_scope(area_level, area_code, ptype), points=pts)
@@ -103,8 +116,8 @@ class MarketService:
     # Graph 2 · Negotiating room ───────────────────────────────────────────────
     @staticmethod
     @cached(market_price_drop_pressure_cache)
-    async def price_drop_pressure(session: AsyncSession, area_level, area_code, ptype) -> PriceDropPressureResponse:
-        rows = await repo.price_drop_pressure(session, area_level, area_code, ptype)
+    async def price_drop_pressure(session: AsyncSession, area_level, area_code, ptype, months) -> PriceDropPressureResponse:
+        rows = await repo.price_drop_pressure(session, area_level, area_code, ptype, months)
         pts = [PriceDropPressurePoint(month=r["month"], price_drops=_i(r["price_drops"]),
                                       new_listings=_i(r["new_listings"]),
                                       drops_per_100_new=_f(r["drops_per_100_new"])) for r in rows]
@@ -124,24 +137,24 @@ class MarketService:
     # Graph 3 · Supply & demand ────────────────────────────────────────────────
     @staticmethod
     @cached(market_fresh_supply_cache)
-    async def fresh_supply(session: AsyncSession, area_level, area_code) -> FreshSupplyResponse:
-        rows = await repo.fresh_supply(session, area_level, area_code)
+    async def fresh_supply(session: AsyncSession, area_level, area_code, months) -> FreshSupplyResponse:
+        rows = await repo.fresh_supply(session, area_level, area_code, months)
         pts = [FreshSupplyPoint(month=r["month"], property_type=r["property_type"],
                                 new_listings=_i(r["new_listings"])) for r in rows]
         return FreshSupplyResponse(scope=_scope(area_level, area_code), points=pts)
 
     @staticmethod
     @cached(market_homes_sold_cache)
-    async def homes_sold(session: AsyncSession, area_level, area_code, ptype) -> HomesSoldResponse:
-        rows = await repo.homes_sold(session, area_level, area_code, ptype)
-        pts = [HomesSoldPoint(month=r["month"], closed_sales=_i(r["closed_sales"])) for r in rows]
+    async def homes_sold(session: AsyncSession, area_level, area_code, ptype, months) -> HomesSoldResponse:
+        rows = await _closed_monthly(session, area_level, area_code, ptype, months)
+        pts = [HomesSoldPoint(month=r["month"], closed_sales=_i(r["sample_size"])) for r in rows]
         return HomesSoldResponse(scope=_scope(area_level, area_code, ptype), points=pts)
 
     # Graph 4 · What is available ──────────────────────────────────────────────
     @staticmethod
     @cached(market_inventory_cache)
-    async def available_inventory(session: AsyncSession, area_level, area_code, ptype) -> InventoryResponse:
-        rows = await repo.available_inventory(session, area_level, area_code, ptype)
+    async def available_inventory(session: AsyncSession, area_level, area_code, ptype, months) -> InventoryResponse:
+        rows = await repo.available_inventory(session, area_level, area_code, ptype, months)
         pts = [InventoryPoint(month=r["month"], active_listings=_i(r["active_listings"]),
                               in_contract=_i(r["in_contract"])) for r in rows]
         return InventoryResponse(scope=_scope(area_level, area_code, ptype), points=pts)
@@ -159,8 +172,8 @@ class MarketService:
     # Graph 5 · How fast homes sell ────────────────────────────────────────────
     @staticmethod
     @cached(market_speed_to_sell_cache)
-    async def speed_to_sell(session: AsyncSession, area_level, area_code) -> SpeedToSellResponse:
-        rows = await repo.speed_to_sell(session, area_level, area_code)
+    async def speed_to_sell(session: AsyncSession, area_level, area_code, months) -> SpeedToSellResponse:
+        rows = await repo.speed_to_sell(session, area_level, area_code, months)
         pts = []
         for r in rows:
             n = _i(r["sample_size"])
