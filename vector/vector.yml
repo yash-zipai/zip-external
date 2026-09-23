@@ -19,14 +19,12 @@ api:
 sources:
 
   zipai_logs:
-    type: docker_logs   #files
-    include:
-      - zipai-external-api             #- "C:/temp/zipai.log"  # <-- CHANGED: forward slashes (backslashes break Vector's glob on Windows)
-    read_from: beginning
-    ignore_older_secs: 86400
-
-    #include_containers:                   # (correctly commented out — that's a docker_logs field)
-    #  - zipai-external-api
+    type: docker_logs
+    # docker_logs takes include_containers (container-name prefixes). `include`,
+    # `read_from` and `ignore_older_secs` belong to the `file` source; on docker_logs
+    # they fail config validation and Vector exits with code 78 in a restart loop.
+    include_containers:
+      - zipai-external-api
 
 #################################################
 # Transforms

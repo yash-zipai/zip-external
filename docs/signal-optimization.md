@@ -431,6 +431,51 @@ Fix 2 (indexes) is the remaining big step for city scope.
 
 ---
 
+## Post-deploy measurements (2026-09-23 — indexes applied, code deployed)
+
+Indexes from Fix 2 were applied by the DBA and are all **valid**. `ANALYZE` was run on both
+tables. The code (PR #60) is deployed to `54.173.204.147:8001`, confirmed by `months` appearing
+in the OpenAPI spec.
+
+### Database (read-only, `EXPLAIN ANALYZE`)
+No sequential scans remain. Every feed query uses `ix_lf_city_*`, `ix_me_city_scope`,
+`ix_me_zip_scope` or the existing zip indexes.
+
+**Feed DB time per area:**
+
+| Scope | Original (old code, no indexes) | Now | Change |
+|---|---|---|---|
+| city=Menlo Park | 1,205 ms (9 queries) | **22.6 ms** (6 queries) | ~53× less |
+| city=Portola Valley | 998 ms | **6.2 ms** | ~160× less |
+| zip=94025 | 422 ms | **21.7 ms** | ~19× less |
+
+**Under load.** The same 36-query workload (both client cities) as the baseline saturation test:
+
+| Concurrency | Before: median / p90 | Now: median / p90 | Total DB time |
+|---|---|---|---|
+| 8 (prod max) | 471 ms / 950 ms | **1.7 ms / 10.6 ms** | 20,066 ms → **188 ms** |
+
+The CPU saturation behind the pool queueing is gone.
+
+### Deployed server (GET only, from a client ~220 ms RTT away)
+- **Server-side cache-miss cost per chart:** each endpoint requested sequentially, cold then warm,
+  on a keep-alive connection. The difference is the server's own work for a miss.
+  - **10–35 ms** typically.
+  - An occasional 115–236 ms, most likely a worker opening a fresh DB connection.
+  - Warm requests cost only the network hop.
+- **Full Signals burst** (2 areas, 46 requests, ZipData's pattern, cold via unused `months`):
+  - Page wall time: **1.7–3.5 s** from the test client.
+  - Median request: ~600 ms, of which ~220 ms is network.
+  - **0 requests over ZipData's 5 s timeout.**
+- **About the tail.** The multi-second tail in the burst comes from the test client's
+  long-haul link (46 parallel connections at ~220 ms RTT). The warm burst, with no DB work,
+  shows the same tail. ZipData calls this API from AWS, so it should see server time plus
+  a few ms.
+- **Before, for comparison:** ZipData had logged `rate/history` at >8 s cold, and feed cards were
+  hitting the 5 s timeout. Locally, the old code's cold burst for 1 area took 15.3 s.
+
+---
+
 ## Open items — recommended, not done in this repo
 
 ### A. Apply Fix 2's indexes (DBA / pipeline owner)
@@ -480,6 +525,10 @@ adding CPU pressure. It should be measured, not guessed.
   the API itself does not honour the flag.
 - **Signal data freshness.** The last load was 2026-09-08, 15 days before this work. If
   daily loads are expected, the loader may have stalled.
+- **The Vector log shipper was crash-looping** (exit 78) on an invalid `docker_logs` config.
+  `include`, `read_from` and `ignore_older_secs` are `file`-source options. While it was down,
+  analytics events were not forwarded to `/v1/internal/vector/events`. Fixed in
+  `vector/vector.yml` (use `include_containers`); needs redeploy and validation on the server.
 - **Implausible dates in the data.** `list_date` spans 1916–2027. Future-dated rows could
   show up in trend charts.
 
