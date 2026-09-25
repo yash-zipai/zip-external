@@ -41,11 +41,15 @@ async def _rows(session: AsyncSession, sql: str, params: dict[str, Any]) -> list
     return [dict(r._mapping) for r in result.fetchall()]
 
 
-# ── Graph 1 + Graph 3 · CLOSED SALES PER MONTH (shared) ───────────────────────
-#  One scan of the area's closed sales feeds three charts: home-price-trend
-#  (median_sale_price, sample_size), homes-sold (sample_size) and value-per-sqft
+# ── Graph 1 + Graph 2 + Graph 3 · CLOSED SALES PER MONTH (shared) ─────────────
+#  One scan of the area's closed sales feeds five charts: home-price-trend
+#  (median_sale_price, sample_size), homes-sold (sample_size), value-per-sqft
 #  (median_ppsf, ppsf_sample_size — only sales with living_sqft > 0; months with
-#  none are dropped by the service, as the old per-chart WHERE did).
+#  none are dropped by the service, as the old per-chart WHERE did), buyer-leverage
+#  (median_sale_to_list, stl_sample_size) and price-reductions (sold_after_cut,
+#  median_cut_pct, cut_sample_size).
+#  A "cut" is a final list price below the original one. Cuts deeper than 50% are
+#  left out of the cut figures: they are data-entry errors, not negotiations.
 async def closed_monthly(session, area_level, area_code, property_type, months):
     col = _area_col(area_level)
     sql = f"""
@@ -54,7 +58,17 @@ async def closed_monthly(session, area_level, area_code, property_type, months):
                count(*) AS sample_size,
                round((percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price/NULLIF(living_sqft,0))
                       FILTER (WHERE living_sqft > 0))::numeric,0) AS median_ppsf,
-               count(*) FILTER (WHERE living_sqft > 0) AS ppsf_sample_size
+               count(*) FILTER (WHERE living_sqft > 0) AS ppsf_sample_size,
+               round((percentile_cont(0.5) WITHIN GROUP (ORDER BY sale_price/list_price)
+                      FILTER (WHERE sale_price > 0 AND list_price > 0))::numeric,4) AS median_sale_to_list,
+               count(*) FILTER (WHERE sale_price > 0 AND list_price > 0) AS stl_sample_size,
+               count(*) FILTER (WHERE list_price < original_list_price
+                                  AND list_price >= 0.5*original_list_price) AS sold_after_cut,
+               round((100*percentile_cont(0.5) WITHIN GROUP (ORDER BY 1 - list_price/original_list_price)
+                      FILTER (WHERE list_price < original_list_price
+                                AND list_price >= 0.5*original_list_price))::numeric,1) AS median_cut_pct,
+               count(*) FILTER (WHERE original_list_price > 0 AND list_price > 0
+                                  AND list_price >= 0.5*original_list_price) AS cut_sample_size
         FROM   signal.listing_fact
         WHERE  standard_status = 'Closed' AND property_type = :ptype AND {col} = :area
           AND  close_date >= :start

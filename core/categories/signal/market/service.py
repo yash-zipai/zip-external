@@ -2,7 +2,7 @@
 ZipAI — Market (MLS) Service Layer — SLIM build.
 
 Maps repository rows to typed Pydantic models and applies the low-confidence
-guard (sample_size < 5) on the price / PPSF / DOM charts.
+guard (sample_size < 5) on the price / PPSF / DOM / leverage / reduction charts.
 """
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ from core.cache import (
     market_value_per_sqft_cache,
     market_price_drop_pressure_cache,
     market_price_cuts_cache,
+    market_buyer_leverage_cache,
+    market_price_reductions_cache,
     market_fresh_supply_cache,
     market_homes_sold_cache,
     market_inventory_cache,
@@ -30,6 +32,8 @@ from .schemas import (
     ValuePerSqftPoint, ValuePerSqftResponse,
     PriceDropPressurePoint, PriceDropPressureResponse,
     PriceCutRow, PriceCutsResponse,
+    BuyerLeveragePoint, BuyerLeverageResponse,
+    PriceReductionsPoint, PriceReductionsResponse,
     FreshSupplyPoint, FreshSupplyResponse,
     HomesSoldPoint, HomesSoldResponse,
     InventoryPoint, InventoryResponse,
@@ -133,6 +137,46 @@ class MarketService:
                            cut_amount=_f(r["cut_amount"]), cut_pct=_f(r["cut_pct"])) for r in rows]
         return PriceCutsResponse(scope=_scope(area_level, area_code, ptype), year=year, month=month,
                                  count=len(out), rows=out)
+
+    @staticmethod
+    @cached(market_buyer_leverage_cache)
+    async def buyer_leverage(session: AsyncSession, area_level, area_code, months) -> BuyerLeverageResponse:
+        # Same shared rows as home-price-trend for SF and CONDO, which are usually
+        # requested for the same area in the same page load, so these are cache hits.
+        by_month: dict = {}
+        for key, ptype in (("sf", "SF"), ("condo", "CONDO")):
+            for r in await _closed_monthly(session, area_level, area_code, ptype, months):
+                n = _i(r["stl_sample_size"])
+                if n == 0:
+                    continue
+                p = by_month.setdefault(r["month"], {"sf": None, "condo": None, "sf_n": 0, "condo_n": 0})
+                p[f"{key}_n"] = n
+                if n >= LOW_CONFIDENCE_MIN:   # a thin series is null, not flagged (see schema)
+                    p[key] = _f(r["median_sale_to_list"])
+        pts = []
+        for month in sorted(by_month):
+            p = by_month[month]
+            n = (p["sf_n"] if p["sf"] is not None else 0) + (p["condo_n"] if p["condo"] is not None else 0)
+            pts.append(BuyerLeveragePoint(month=month, sf=p["sf"], condo=p["condo"],
+                                          sf_sample_size=p["sf_n"], condo_sample_size=p["condo_n"],
+                                          sample_size=n, low_confidence=n == 0))
+        return BuyerLeverageResponse(scope=_scope(area_level, area_code), points=pts)
+
+    @staticmethod
+    @cached(market_price_reductions_cache)
+    async def price_reductions(session: AsyncSession, area_level, area_code, ptype, months) -> PriceReductionsResponse:
+        rows = await _closed_monthly(session, area_level, area_code, ptype, months)
+        pts = []
+        for r in rows:
+            n = _i(r["cut_sample_size"])
+            if n == 0:
+                continue  # no sale with a known original list price this month
+            cut = _i(r["sold_after_cut"])
+            pts.append(PriceReductionsPoint(month=r["month"], sold_after_cut=cut,
+                                            pct_reduced=round(100 * cut / n, 1),
+                                            median_cut_pct=_f(r["median_cut_pct"]),
+                                            sample_size=n, low_confidence=n < LOW_CONFIDENCE_MIN))
+        return PriceReductionsResponse(scope=_scope(area_level, area_code, ptype), points=pts)
 
     # Graph 3 · Supply & demand ────────────────────────────────────────────────
     @staticmethod
