@@ -1,8 +1,8 @@
 """
 Market (MLS) — API routes — SLIM build.
 
-Only the 5 dashboard graphs + the two drill-down feeds. Scope each call with
-exactly one of county | city | zip, plus ptype where single-type.
+Only the 5 dashboard graphs + buyer leverage + the drill-down feeds. Scope each
+call with exactly one of county | city | zip, plus ptype where single-type.
 
     from core.signal.market.routes import router as market_router
     app.include_router(market_router, prefix="/v1")
@@ -19,6 +19,7 @@ from core.schema_manager import get_schema_session
 from .schemas import (
     HomePriceTrendResponse, ValuePerSqftResponse,
     PriceDropPressureResponse, PriceCutsResponse,
+    BuyerLeverageResponse, PriceReductionsResponse,
     FreshSupplyResponse, HomesSoldResponse,
     InventoryResponse, SpeedToSellResponse,
     ListingsResponse,
@@ -107,6 +108,25 @@ async def price_cuts(scope: MarketScope = Depends(market_scope),
                      month: int | None = Query(None, ge=1, le=12, description="Filter by month number 1-12."),
                      db: AsyncSession = Depends(_db)) -> PriceCutsResponse:
     return await MarketService.price_cuts(db, scope.area_level, scope.area_code, ptype, year, month, ONLY_PUBLIC_DEFAULT)
+
+
+# Buyer leverage — from closed sales, so history goes back as far as listing_fact
+# does (2015), unlike the price-cut events above (recorded since May 2026).
+@router.get("/market/buyer-leverage/", response_model=BuyerLeverageResponse,
+            summary="Buyer Leverage — sale-to-list ratio (SF and Condo)")
+async def buyer_leverage(scope: MarketScope = Depends(market_scope),
+                         months: int = Depends(months_param),
+                         db: AsyncSession = Depends(_db)) -> BuyerLeverageResponse:
+    return await MarketService.buyer_leverage(db, scope.area_level, scope.area_code, months)
+
+
+@router.get("/market/price-reductions/", response_model=PriceReductionsResponse,
+            summary="Buyer Leverage — homes sold after a price cut")
+async def price_reductions(scope: MarketScope = Depends(market_scope),
+                           ptype: str = Depends(ptype_param),
+                           months: int = Depends(months_param),
+                           db: AsyncSession = Depends(_db)) -> PriceReductionsResponse:
+    return await MarketService.price_reductions(db, scope.area_level, scope.area_code, ptype, months)
 
 
 # ═══════════════════════ GRAPH 3 · SUPPLY & DEMAND ═══════════════════════════

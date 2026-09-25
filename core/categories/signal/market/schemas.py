@@ -75,6 +75,39 @@ class PriceCutsResponse(BaseModel):
     rows: list[PriceCutRow] = Field(default_factory=list)
 
 
+# buyer leverage: median sale price / final list price, SF and Condo side by side.
+# One row carries two series but one flag, so a series from fewer than 5 sales is
+# null rather than flagged; low_confidence means neither series had enough sales.
+class BuyerLeveragePoint(BaseModel):
+    month: date
+    sf: float | None = None               # e.g. 1.034 = sold 3.4% over list
+    condo: float | None = None
+    sf_sample_size: int = 0
+    condo_sample_size: int = 0
+    sample_size: int = 0                  # sales behind the non-null series
+    low_confidence: bool = False
+
+
+class BuyerLeverageResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[BuyerLeveragePoint] = Field(default_factory=list)
+
+
+# price reductions: homes sold after a price cut (final list price < original)
+class PriceReductionsPoint(BaseModel):
+    month: date
+    sold_after_cut: int = 0
+    pct_reduced: float | None = None      # % of sales that had a cut, e.g. 8.7
+    median_cut_pct: float | None = None   # median cut among those, e.g. 7.2 (% off original)
+    sample_size: int = 0                  # sales with a known original list price
+    low_confidence: bool = False
+
+
+class PriceReductionsResponse(BaseModel):
+    scope: MarketScopeEcho
+    points: list[PriceReductionsPoint] = Field(default_factory=list)
+
+
 # ── Graph 3 · Supply & demand ─────────────────────────────────────────────────
 class FreshSupplyPoint(BaseModel):
     month: date

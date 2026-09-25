@@ -106,7 +106,9 @@ market_speed_to_sell_cache        = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
 market_listings_cache             = TTLCache(maxsize=256, ttl=300)   # drill-down, shorter TTL
 market_price_distribution_cache   = TTLCache(maxsize=256, ttl=900)   # Graph 4 drill-down
 market_dom_breakdown_cache        = TTLCache(maxsize=256, ttl=900)   # Graph 5 drill-down
-market_closed_monthly_cache       = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)   # shared by price trend / $/sqft / homes sold
+market_closed_monthly_cache       = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)   # shared by price trend / $/sqft / homes sold / leverage / reductions
+market_buyer_leverage_cache       = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
+market_price_reductions_cache     = TTLCache(maxsize=256, ttl=MARKET_TREND_TTL)
 
 #rate  (Freddie Mac mortgage rates)
 rate_current_cache = TTLCache(maxsize=8,  ttl=1800)
