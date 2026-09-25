@@ -13,6 +13,8 @@ from core.categories.mls.schemas import (
     MLSCheck,
     MLSChecksResponse,
     MLSStatusResponse,
+    PhotoStatusBreakdownResponse,
+    PhotoStatusRow,
     SourceTargetResponse,
     StatusBreakdownResponse,
     StatusRow,
@@ -138,6 +140,35 @@ class MLSService:
         return StatusBreakdownResponse(
             checked_at=rows[0]["checked_at"] if rows else None,
             repairs_since_check=await MLSRepository.fetch_repairs_since_check(session),
+            total=len(items),
+            items=items,
+        )
+
+    @staticmethod
+    async def get_photo_status_breakdown(
+        session: AsyncSession,
+    ) -> PhotoStatusBreakdownResponse:
+        rows = await MLSRepository.fetch_photo_status_breakdown(session)
+
+        items = [
+            PhotoStatusRow(
+                status=r["status"] or "(no status)",
+                mls_has=r["mls_has"],
+                we_have=r["we_have"],
+                difference=r["difference"],
+                mls_from=r["mls_from"],
+                note=r["note"],
+            )
+            for r in rows
+        ]
+
+        # The totals are the ones the check saved, so they match /status.
+        first = rows[0] if rows else {}
+        return PhotoStatusBreakdownResponse(
+            checked_at=first.get("checked_at"),
+            mls_has=first.get("total_mls_has"),
+            we_have=first.get("total_we_have"),
+            difference=first.get("total_difference"),
             total=len(items),
             items=items,
         )
