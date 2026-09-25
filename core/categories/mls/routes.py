@@ -7,7 +7,7 @@ It is included by app.py with:
     app.include_router(mls_dq_router, prefix="/v1")
 so the final paths are /v1/mls/dq/...
 
-Five routes, ordered the way the dashboard reads — the broad question first,
+Six routes, ordered the way the dashboard reads — the broad question first,
 narrowing down to individual listings. None of them call the MLS: the checks
 already did that and wrote the results away, so a page opens in milliseconds
 rather than the several minutes a check run takes.
@@ -22,6 +22,7 @@ from core.categories.mls.schemas import (
     CheckListingsResponse,
     MLSChecksResponse,
     MLSStatusResponse,
+    PhotoStatusBreakdownResponse,
     SourceTargetResponse,
     StatusBreakdownResponse,
 )
@@ -94,6 +95,30 @@ async def get_status_breakdown(
     db: AsyncSession = Depends(get_schema_session("mls")),
 ) -> StatusBreakdownResponse:
     return await MLSService.get_status_breakdown(session=db)
+
+
+# -- Photos by status ----------------------------------------------------------
+
+
+@router.get(
+    "/photos/status-breakdown",
+    response_model=PhotoStatusBreakdownResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Photos by listing status, against the MLS",
+    description=(
+        "Full-size photos at the MLS against photos held here, in total and "
+        "split by listing status, which shows where a photo gap sits.\n\n"
+        "The MLS figure is the MLS's own photo count for the listings in its "
+        "feed. Each row says whether that figure was read live from the MLS "
+        "when the check ran, or taken from the count stored with each listing "
+        "(used for statuses with too many homes to read live every run). "
+        "A snapshot from when the check ran, not a live reading."
+    ),
+)
+async def get_photo_status_breakdown(
+    db: AsyncSession = Depends(get_schema_session("mls")),
+) -> PhotoStatusBreakdownResponse:
+    return await MLSService.get_photo_status_breakdown(session=db)
 
 
 # -- Checks --------------------------------------------------------------------

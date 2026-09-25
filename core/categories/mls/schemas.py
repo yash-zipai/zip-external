@@ -136,6 +136,49 @@ class StatusBreakdownResponse(BaseModel):
     items: list[StatusRow]
 
 
+# -- Photos by status ----------------------------------------------------------
+
+
+class PhotoStatusRow(BaseModel):
+    status: str
+    mls_has: int | None = Field(
+        default=None, description="Full-size photos the MLS says these homes have."
+    )
+    we_have: int | None = Field(
+        default=None,
+        description="Full-size photos held here. Thumbnails are not counted.",
+    )
+    difference: int | None = Field(
+        default=None, description="Photos at the MLS minus photos held here."
+    )
+    mls_from: str | None = Field(
+        default=None,
+        description=(
+            "live — read from the MLS when the check ran. stored — the photo "
+            "count the MLS sent with each listing at its last sync; used for "
+            "statuses with too many homes to read live on every run."
+        ),
+    )
+    note: str | None = Field(
+        default=None,
+        description="Set when the MLS returned fewer homes than it counted.",
+    )
+
+
+class PhotoStatusBreakdownResponse(BaseModel):
+    checked_at: datetime | None = Field(
+        default=None,
+        description="When these counts were taken (Pacific time). A snapshot, not live.",
+    )
+    mls_has: int | None = Field(default=None, description="Total photos at the MLS.")
+    we_have: int | None = Field(default=None, description="Total photos held here.")
+    difference: int | None = Field(
+        default=None, description="Total photos at the MLS minus photos held here."
+    )
+    total: int = Field(description="Number of status rows below.")
+    items: list[PhotoStatusRow]
+
+
 # -- Checks --------------------------------------------------------------------
 
 

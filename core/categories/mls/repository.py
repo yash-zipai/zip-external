@@ -45,16 +45,18 @@ STATUS_SQL = text("""
         (SELECT MAX(modification_timestamp) AT TIME ZONE 'America/Los_Angeles'
            FROM zipdata_idxlisting)                                AS zipai_as_of,
 
-        -- Full-size photos, MLS against ours. Same shape as the listing
-        -- totals, read from the photo reconciliation check.
+        -- Full-size photos, MLS against ours, read from the photo compare
+        -- check. The MLS figure is the MLS's own photo count for the listings
+        -- in its feed, not its raw Media total, which also holds photos of
+        -- listings it has removed.
         (SELECT (breakdown->>'mls_has')::bigint
-           FROM latest WHERE check_name = 'photo_reconciliation_total') AS photos_mls,
+           FROM latest WHERE check_name = 'photo_count_compare') AS photos_mls,
         (SELECT (breakdown->>'we_have')::bigint
-           FROM latest WHERE check_name = 'photo_reconciliation_total') AS photos_ours,
+           FROM latest WHERE check_name = 'photo_count_compare') AS photos_ours,
         (SELECT (breakdown->>'difference')::bigint
-           FROM latest WHERE check_name = 'photo_reconciliation_total') AS photos_gap,
+           FROM latest WHERE check_name = 'photo_count_compare') AS photos_gap,
         (SELECT run_at AT TIME ZONE 'America/Los_Angeles'
-           FROM latest WHERE check_name = 'photo_reconciliation_total') AS photos_as_of,
+           FROM latest WHERE check_name = 'photo_count_compare') AS photos_as_of,
 
         -- Only repairs that bring in missing listings can close the total gap.
         -- A duplicate-address report, say, is real work but leaves the count
@@ -109,6 +111,33 @@ STATUS_BREAKDOWN_SQL = text("""
            s.value->>'error'           AS error,
            l.run_at AT TIME ZONE 'America/Los_Angeles' AS checked_at
     FROM latest l, jsonb_each(l.breakdown) AS s(key, value)
+    ORDER BY (s.value->>'mls')::bigint DESC NULLS LAST
+""")
+
+
+# Photos by listing status, from the same photo compare check. Each status
+# says where its MLS figure came from: "live" when read from the MLS on the
+# run, "stored" when taken from the photo count the MLS sent with each
+# listing (Closed and Delete are too many homes to read live on every run).
+PHOTO_STATUS_BREAKDOWN_SQL = text("""
+    WITH latest AS (
+        SELECT breakdown, run_at
+        FROM admin.dq_check_result
+        WHERE check_name = 'photo_count_compare'
+        ORDER BY run_at DESC
+        LIMIT 1
+    )
+    SELECT s.key                        AS status,
+           (s.value->>'mls')::bigint    AS mls_has,
+           (s.value->>'we')::bigint     AS we_have,
+           (s.value->>'diff')::bigint   AS difference,
+           s.value->>'mls_from'         AS mls_from,
+           s.value->>'note'             AS note,
+           (l.breakdown->>'mls_has')::bigint    AS total_mls_has,
+           (l.breakdown->>'we_have')::bigint    AS total_we_have,
+           (l.breakdown->>'difference')::bigint AS total_difference,
+           l.run_at AT TIME ZONE 'America/Los_Angeles' AS checked_at
+    FROM latest l, jsonb_each(l.breakdown->'by_status') AS s(key, value)
     ORDER BY (s.value->>'mls')::bigint DESC NULLS LAST
 """)
 
@@ -177,9 +206,6 @@ CHECKS_SQL = text("""
 """)
 
 
-# Checks record their detail two ways: some carry whole listings in the
-# breakdown, the rest only keys. This covers both, so a caller does not have to
-# know which kind of check it asked about.
 # Checks record their detail two ways: some carry whole listings in the
 # breakdown, the rest only keys. This covers both, so a caller does not have to
 # know which kind of check it asked about.
@@ -314,6 +340,13 @@ class MLSRepository:
     @staticmethod
     async def fetch_status_breakdown(session: AsyncSession) -> list[dict[str, Any]]:
         result = await session.execute(STATUS_BREAKDOWN_SQL)
+        return [dict(row) for row in result.mappings().all()]
+
+    @staticmethod
+    async def fetch_photo_status_breakdown(
+        session: AsyncSession,
+    ) -> list[dict[str, Any]]:
+        result = await session.execute(PHOTO_STATUS_BREAKDOWN_SQL)
         return [dict(row) for row in result.mappings().all()]
 
     @staticmethod
