@@ -44,7 +44,7 @@ async def overview(session: AsyncSession, days: int) -> dict:
 
 async def intent_distribution(session: AsyncSession, days: int) -> list[dict]:
     return await _rows(session, f"""
-        SELECT intent,
+        SELECT case when intent='viewapi' then 'MLS' else intent end as intent,
                COUNT(*) AS questions,
                COUNT(DISTINCT session_id) AS sessions,
                COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE {ANSWERED_CLAUSE})
