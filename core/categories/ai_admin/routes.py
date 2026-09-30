@@ -12,9 +12,11 @@ Endpoints (grouped under "AI Admin" in Swagger), all under /v1/ai-admin:
     GET /intent-distribution  — questions by type (permit / fee / unknown)
     GET /questions-over-time  — daily volume + unanswered
     GET /top-unanswered       — data-gap backlog
+    GET /user-categories      — who asked what, by category
+    GET /user-questions       — the questions behind one of those rows
 """
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from .service import AiAdminService
 
@@ -26,6 +28,8 @@ from .schemas import (
     QuestionsOverTimeResponse,
     TopQuestionsResponse,
     TopUnansweredResponse,
+    UserCategoriesResponse,
+    UserQuestionsResponse,
 )
 
 router = APIRouter(prefix="/ai-admin", tags=["AI Admin"])
@@ -101,3 +105,49 @@ async def get_top_unanswered(
     db: AsyncSession = Depends(get_schema_session("rag")),
 ):
     return await AiAdminService.get_top_unanswered(db, days=days, limit=limit)
+
+
+@router.get(
+    "/user-categories",
+    response_model=UserCategoriesResponse,
+    status_code=status.HTTP_200_OK,
+    summary="AI Admin — Who asked what",
+    description=(
+        "One row per person and category, most active person first. Each row carries "
+        "`person` and `category` — pass both to /user-questions to open it. "
+        "A person is their user_id when signed in, otherwise their session_id. "
+        "Params: days, limit, signed_in_only."
+    ),
+)
+async def get_user_categories(
+    days: int = 30,
+    limit: int = 200,
+    signed_in_only: bool = Query(False, description="Exclude anonymous askers."),
+    db: AsyncSession = Depends(get_schema_session("rag")),
+):
+    return await AiAdminService.get_user_categories(
+        db, days=days, limit=limit, signed_in_only=signed_in_only
+    )
+
+
+@router.get(
+    "/user-questions",
+    response_model=UserQuestionsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="AI Admin — One person's questions",
+    description=(
+        "The questions behind a /user-categories row. Pass that row's `person` and "
+        "`category`; omit `category` for everything this person asked. "
+        "Params: person (required), category, days, limit."
+    ),
+)
+async def get_user_questions(
+    person: str = Query(..., description="The `person` value from /user-categories."),
+    category: str | None = Query(None, description="The `category` value from that row. Omit for all."),
+    days: int = 90,
+    limit: int = 200,
+    db: AsyncSession = Depends(get_schema_session("rag")),
+):
+    return await AiAdminService.get_user_questions(
+        db, person=person, days=days, limit=limit, category=category
+    )

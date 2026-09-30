@@ -11,6 +11,8 @@ Endpoints (all under /v1/ai-admin):
     GET /intent-distribution
     GET /questions-over-time
     GET /top-unanswered
+    GET /user-categories
+    GET /user-questions
 """
 
 from __future__ import annotations
@@ -76,3 +78,41 @@ class TopUnansweredResponse(BaseModel):
     """The data-gap backlog: questions the AI couldn't answer, ranked."""
     days: int = 30
     items: list[UnansweredQuestion] = Field(default_factory=list)
+
+
+class UserCategoryRow(BaseModel):
+    """One person and one category — a row the client can open."""
+    person: str = Field(..., description="user_id when signed in, otherwise session_id. Pass this back to /user-questions.")
+    user_id: str | None = Field(None, description="Set only for signed-in askers.")
+    user_kind: str = Field("anonymous", description="signed_in | anonymous.")
+    category: str = Field(..., description="Question type. Pass this back to /user-questions.")
+    questions: int = Field(0, description="Questions this person asked in this category.")
+    answered_rate_pct: float = Field(0.0, description="% of them the AI answered.")
+    person_total: int = Field(0, description="All questions this person asked, across categories.")
+    last_asked: str | None = None
+
+
+class UserCategoriesResponse(BaseModel):
+    days: int = 30
+    signed_in_only: bool = False
+    items: list[UserCategoryRow] = Field(default_factory=list)
+
+
+class UserQuestion(BaseModel):
+    question: str
+    category: str
+    asked_at: str | None = None
+    agent_used: str | None = None
+    outcome: str | None = None
+    source: str | None = Field(None, description="typed, or the suggestion it came from.")
+    city: str | None = None
+    total_latency_ms: int | None = None
+    answered: bool = False
+
+
+class UserQuestionsResponse(BaseModel):
+    """What one person asked — the rows behind a UserCategoryRow."""
+    days: int = 90
+    person: str
+    category: str | None = Field(None, description="Absent when every category was requested.")
+    items: list[UserQuestion] = Field(default_factory=list)
