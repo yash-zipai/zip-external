@@ -77,6 +77,8 @@ ai_top_questions_cache  = TTLCache(maxsize=32, ttl=120)
 ai_intent_cache         = TTLCache(maxsize=8,  ttl=120)
 ai_over_time_cache      = TTLCache(maxsize=16, ttl=120)
 ai_top_unanswered_cache = TTLCache(maxsize=32, ttl=120)
+ai_top_unanswered_cache  = TTLCache(maxsize=32, ttl=120)
+ai_user_categories_cache = TTLCache(maxsize=64, ttl=120)
 
 #data_audit
 audit_ingestion_cache    = TTLCache(maxsize=16, ttl=300)
