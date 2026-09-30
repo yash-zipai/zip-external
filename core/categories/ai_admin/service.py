@@ -17,6 +17,10 @@ from core.categories.ai_admin.schemas import (
     TopQuestionsResponse,
     TopUnansweredResponse,
     UnansweredQuestion,
+    UserCategoriesResponse,
+    UserCategoryRow,
+    UserQuestion,
+    UserQuestionsResponse,
 )
 
 from core.cache import (
@@ -26,7 +30,9 @@ from core.cache import (
     ai_intent_cache,
     ai_over_time_cache,
     ai_top_unanswered_cache,
+    ai_user_categories_cache,
 )
+
 
 class AiAdminService:
 
@@ -111,3 +117,54 @@ class AiAdminService:
             for r in rows
         ]
         return TopUnansweredResponse(days=days, items=items)
+
+    @staticmethod
+    @cached(ai_user_categories_cache)
+    async def get_user_categories(
+        session: AsyncSession,
+        days: int = 30,
+        limit: int = 200,
+        signed_in_only: bool = False,
+    ) -> UserCategoriesResponse:
+        rows = await repo.user_categories(session, days, limit, signed_in_only)
+        items = [
+            UserCategoryRow(
+                person=str(r["person"]),
+                user_id=r["user_id"],
+                user_kind=str(r["user_kind"]),
+                category=str(r["category"]),
+                questions=int(r["questions"] or 0),
+                answered_rate_pct=float(r["answered_rate_pct"] or 0),
+                person_total=int(r["person_total"] or 0),
+                last_asked=r["last_asked"],
+            )
+            for r in rows
+        ]
+        return UserCategoriesResponse(days=days, signed_in_only=signed_in_only, items=items)
+
+    @staticmethod
+    async def get_user_questions(
+        session: AsyncSession,
+        person: str,
+        days: int = 90,
+        limit: int = 200,
+        category: str | None = None,
+    ) -> UserQuestionsResponse:
+        # Not cached: one person at a time, opened on demand, and it is the
+        # one place a reader expects to see a question they just asked.
+        rows = await repo.user_questions(session, person, days, limit, category)
+        items = [
+            UserQuestion(
+                question=str(r["question"]),
+                category=str(r["category"]),
+                asked_at=r["asked_at"],
+                agent_used=r["agent_used"],
+                outcome=r["outcome"],
+                source=r["source"],
+                city=r["city"],
+                total_latency_ms=int(r["total_latency_ms"]) if r["total_latency_ms"] is not None else None,
+                answered=bool(r["answered"]),
+            )
+            for r in rows
+        ]
+        return UserQuestionsResponse(days=days, person=person, category=category, items=items)
