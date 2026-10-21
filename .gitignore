@@ -16,3 +16,10 @@ __pycache__/
 
 # Docker (local overrides only — docker-compose.yml IS tracked)
 docker-compose.override.yml
+
+# Never commit secrets, virtualenvs or bytecode.
+.env
+venv/
+.venv/
+__pycache__/
+*.pyc

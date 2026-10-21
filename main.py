@@ -20,6 +20,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from core.config import get_settings
+from core.service_auth import ServiceAuthMiddleware
 from core.schema_manager import schema_manager
 from core.categories.healthcare.routes import router as healthcare_router
 from core.categories.crime.routes import router as crime_router
@@ -66,6 +67,9 @@ def create_app() -> FastAPI:
         return {"status": "ok", "service": settings.service_name, "env": settings.app_env}
 
     # Domain routers — final paths become /v1/healthcare/...
+    # Only ZipData/ZipAI may call this service (core/service_auth.py; SERVICE_AUTH_MODE).
+    app.add_middleware(ServiceAuthMiddleware)
+
     app.include_router(healthcare_router, prefix="/v1")
 
     # crime
