@@ -31,8 +31,14 @@ jobs:
 
           echo "Pull latest code"
 
+          # .env is no longer tracked: keep the server's copy across the reset
+          # (the reset to the commit that untracked it would delete it).
+          if [ -f .env ]; then cp .env /tmp/zip-external.env.keep; fi
+
           git fetch origin
           git reset --hard origin/main
+
+          if [ ! -f .env ] && [ -f /tmp/zip-external.env.keep ]; then cp /tmp/zip-external.env.keep .env; fi
 
           echo "Install dependencies"
 
