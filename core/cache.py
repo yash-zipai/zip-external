@@ -71,6 +71,8 @@ analytics_heatmap_cache     = TTLCache(maxsize=32,   ttl=600)
 analytics_funnel_cache      = TTLCache(maxsize=32,   ttl=300)
 analytics_session_cache     = TTLCache(maxsize=32,   ttl=300)
 analytics_conversion_cache  = TTLCache(maxsize=32,   ttl=300)
+analytics_market_stats_cache = TTLCache(maxsize=512, ttl=3600)
+analytics_market_sales_cache = TTLCache(maxsize=256, ttl=300)
 
 #ai_admin
 ai_overview_cache       = TTLCache(maxsize=8,  ttl=120)
