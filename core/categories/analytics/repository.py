@@ -387,8 +387,12 @@ async def ins_search_to_view_conversion(session: AsyncSession, days: int = 30) -
 #              + public.zipdata_idxlisting (list price, area)
 #
 # Dono table public schema me hain, analytics me nahi -- isliye
-# naam public. se qualify kiye hain. Session analytics pe bandhi
-# hai, qualify na karo to "relation does not exist" aayega.
+# naam public. se qualify kiye hain.
+#
+# Har bind parameter CAST(... AS text/int) ke saath hai. Postgres
+# bind parameter ka type khud nahi pakad paata jab wo IS NULL ya
+# arithmetic me aata hai, aur "could not determine data type of
+# parameter" phenk deta hai. Cast hata mat dena.
 # ===========================================================
 
 # Window ka din. Summary aur detail dono yahi map use karte hain.
@@ -407,6 +411,11 @@ _MARKET_SALE_FILTER = """
       AND l.list_price > 0
       AND l.is_lease_listing = false
       AND e.price / l.list_price BETWEEN 0.5 AND 2.0
+      AND l.postal_code = CAST(:zipcode AS text)
+      AND (CAST(:city AS text) IS NULL
+           OR l.city = CAST(:city AS text))
+      AND (CAST(:property_class AS text) = 'all'
+           OR l.property_class = CAST(:property_class AS text))
 """
 
 
@@ -421,8 +430,8 @@ async def ins_market_price_stats(
     pichle 12 mahine me.
 
     City alag-alag rows me aati hai. 94010 me Burlingame aur
-    Hillsborough dono hain aur unka market bilkul alag hai.
-    City di gayi to sirf wahi, warna zipcode ki saari cities.
+    Hillsborough dono hain aur unka market bilkul alag hai --
+    Burlingame ka median $2.9M, mila ke $3.85M.
     """
     sql = f"""
         WITH sales AS (
@@ -434,9 +443,6 @@ async def ins_market_price_stats(
                    l.property_class
             {_MARKET_SALE_FILTER}
               AND e.event_date >= current_date - interval '12 months'
-              AND l.postal_code = :zipcode
-              AND (:city IS NULL OR l.city = :city)
-              AND (:property_class = 'all' OR l.property_class = :property_class)
         )
         SELECT postal_code,
                city,
@@ -520,15 +526,13 @@ async def ins_market_price_sales(
                l.latitude,
                l.longitude
         {_MARKET_SALE_FILTER}
-          AND e.event_date >= current_date - (:days * interval '1 day')
-          AND l.postal_code = :zipcode
-          AND (:city IS NULL OR l.city = :city)
-          AND (:property_class = 'all' OR l.property_class = :property_class)
-          AND (:direction = 'all'
-               OR (:direction = 'over'  AND e.price > l.list_price)
-               OR (:direction = 'under' AND e.price < l.list_price))
+          AND e.event_date >= current_date
+                              - (CAST(:days AS int) * interval '1 day')
+          AND (CAST(:direction AS text) = 'all'
+               OR (CAST(:direction AS text) = 'over'  AND e.price > l.list_price)
+               OR (CAST(:direction AS text) = 'under' AND e.price < l.list_price))
         ORDER BY e.event_date DESC, e.listing_key_numeric
-        LIMIT :limit OFFSET :offset
+        LIMIT CAST(:limit AS int) OFFSET CAST(:offset AS int)
     """
 
     return await _ins_rows(session, sql, {
@@ -554,13 +558,11 @@ async def ins_market_price_sales_count(
     sql = f"""
         SELECT COUNT(*)
         {_MARKET_SALE_FILTER}
-          AND e.event_date >= current_date - (:days * interval '1 day')
-          AND l.postal_code = :zipcode
-          AND (:city IS NULL OR l.city = :city)
-          AND (:property_class = 'all' OR l.property_class = :property_class)
-          AND (:direction = 'all'
-               OR (:direction = 'over'  AND e.price > l.list_price)
-               OR (:direction = 'under' AND e.price < l.list_price))
+          AND e.event_date >= current_date
+                              - (CAST(:days AS int) * interval '1 day')
+          AND (CAST(:direction AS text) = 'all'
+               OR (CAST(:direction AS text) = 'over'  AND e.price > l.list_price)
+               OR (CAST(:direction AS text) = 'under' AND e.price < l.list_price))
     """
 
     return await _ins_scalar(session, sql, {
