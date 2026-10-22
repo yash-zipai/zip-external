@@ -378,3 +378,195 @@ async def ins_search_to_view_conversion(session: AsyncSession, days: int = 30) -
         FROM per_user
     """), {"days": days})).fetchone()
     return dict(row._mapping) if row else {}
+
+
+# ===========================================================
+# API 9 — Market price stats (sold above / below list price)
+#
+# Data source: public.zipdata_idxlistingpriceevent (sold event)
+#              + public.zipdata_idxlisting (list price, area)
+#
+# Dono table public schema me hain, analytics me nahi -- isliye
+# naam public. se qualify kiye hain. Session analytics pe bandhi
+# hai, qualify na karo to "relation does not exist" aayega.
+# ===========================================================
+
+# Window ka din. Summary aur detail dono yahi map use karte hain.
+# window * 30 mat likhna -- 12 pe 360 banega, summary 365 pe hai,
+# aur ginti match nahi karegi.
+WINDOW_DAYS = {3: 90, 6: 180, 9: 270, 12: 365}
+
+
+_MARKET_SALE_FILTER = """
+    FROM public.zipdata_idxlistingpriceevent e
+    JOIN public.zipdata_idxlisting l
+      ON l.listing_key_numeric = e.listing_key_numeric
+    WHERE e.event_type = 'sold'
+      AND e.visibility = 'public'
+      AND e.price > 0
+      AND l.list_price > 0
+      AND l.is_lease_listing = false
+      AND e.price / l.list_price BETWEEN 0.5 AND 2.0
+"""
+
+
+async def ins_market_price_stats(
+    session: AsyncSession,
+    zipcode: str,
+    city: str | None = None,
+    property_class: str = "all",
+) -> list[dict]:
+    """
+    Ek zipcode me kitne ghar asking se upar/neeche bike, aur kitna --
+    pichle 12 mahine me.
+
+    City alag-alag rows me aati hai. 94010 me Burlingame aur
+    Hillsborough dono hain aur unka market bilkul alag hai.
+    City di gayi to sirf wahi, warna zipcode ki saari cities.
+    """
+    sql = f"""
+        WITH sales AS (
+            SELECT e.event_date::date  AS sale_date,
+                   e.price             AS close_price,
+                   l.list_price,
+                   l.postal_code,
+                   l.city,
+                   l.property_class
+            {_MARKET_SALE_FILTER}
+              AND e.event_date >= current_date - interval '12 months'
+              AND l.postal_code = :zipcode
+              AND (:city IS NULL OR l.city = :city)
+              AND (:property_class = 'all' OR l.property_class = :property_class)
+        )
+        SELECT postal_code,
+               city,
+
+               COUNT(*)                                                   AS sales_12m,
+               COUNT(*) FILTER (WHERE sale_date >= current_date - 90)     AS sales_3m,
+               COUNT(*) FILTER (WHERE sale_date >= current_date - 180)    AS sales_6m,
+               COUNT(*) FILTER (WHERE sale_date >= current_date - 270)    AS sales_9m,
+
+               COUNT(*) FILTER (WHERE close_price > list_price)           AS count_above,
+               ROUND(100.0 * COUNT(*) FILTER (WHERE close_price > list_price)
+                     / NULLIF(COUNT(*), 0), 1)                            AS pct_above,
+
+               COUNT(*) FILTER (WHERE close_price = list_price)           AS count_at,
+               ROUND(100.0 * COUNT(*) FILTER (WHERE close_price = list_price)
+                     / NULLIF(COUNT(*), 0), 1)                            AS pct_at,
+
+               COUNT(*) FILTER (WHERE close_price < list_price)           AS count_below,
+               ROUND(100.0 * COUNT(*) FILTER (WHERE close_price < list_price)
+                     / NULLIF(COUNT(*), 0), 1)                            AS pct_below,
+
+               ROUND(percentile_cont(0.5) WITHIN GROUP (
+                     ORDER BY (close_price - list_price) / list_price * 100)
+                     FILTER (WHERE close_price > list_price)::numeric, 1) AS median_pct_above,
+               ROUND(percentile_cont(0.5) WITHIN GROUP (
+                     ORDER BY close_price - list_price)
+                     FILTER (WHERE close_price > list_price)::numeric)    AS median_amount_above,
+
+               ROUND(percentile_cont(0.5) WITHIN GROUP (
+                     ORDER BY (list_price - close_price) / list_price * 100)
+                     FILTER (WHERE close_price < list_price)::numeric, 1) AS median_pct_below,
+               ROUND(percentile_cont(0.5) WITHIN GROUP (
+                     ORDER BY list_price - close_price)
+                     FILTER (WHERE close_price < list_price)::numeric)    AS median_amount_below,
+
+               ROUND(percentile_cont(0.5) WITHIN GROUP (
+                     ORDER BY close_price)::numeric)                      AS median_sale_price,
+               ROUND(percentile_cont(0.5) WITHIN GROUP (
+                     ORDER BY list_price)::numeric)                       AS median_list_price
+        FROM sales
+        GROUP BY postal_code, city
+        ORDER BY sales_12m DESC
+    """
+
+    return await _ins_rows(session, sql, {
+        "zipcode": zipcode,
+        "city": city,
+        "property_class": property_class,
+    })
+
+
+async def ins_market_price_sales(
+    session: AsyncSession,
+    zipcode: str,
+    window: int = 3,
+    direction: str = "all",
+    city: str | None = None,
+    property_class: str = "all",
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """
+    Ek-ek ghar jo upar ya neeche bika -- summary pe click karne par.
+    Wahi shartein jo summary me hain, isliye ginti barabar milegi.
+    """
+    sql = f"""
+        SELECT e.listing_key_numeric,
+               l.unparsed_address,
+               l.city,
+               l.postal_code,
+               l.property_class,
+               l.bedrooms_total,
+               l.bathrooms_total_integer,
+               l.living_area,
+               e.event_date::date                              AS sale_date,
+               l.list_price,
+               e.price                                         AS close_price,
+               e.price - l.list_price                          AS amount_vs_list,
+               ROUND((e.price - l.list_price) / l.list_price * 100, 1)
+                                                               AS pct_vs_list,
+               l.latitude,
+               l.longitude
+        {_MARKET_SALE_FILTER}
+          AND e.event_date >= current_date - (:days * interval '1 day')
+          AND l.postal_code = :zipcode
+          AND (:city IS NULL OR l.city = :city)
+          AND (:property_class = 'all' OR l.property_class = :property_class)
+          AND (:direction = 'all'
+               OR (:direction = 'over'  AND e.price > l.list_price)
+               OR (:direction = 'under' AND e.price < l.list_price))
+        ORDER BY e.event_date DESC, e.listing_key_numeric
+        LIMIT :limit OFFSET :offset
+    """
+
+    return await _ins_rows(session, sql, {
+        "zipcode": zipcode,
+        "city": city,
+        "property_class": property_class,
+        "days": WINDOW_DAYS.get(window, 90),
+        "direction": direction,
+        "limit": limit,
+        "offset": offset,
+    })
+
+
+async def ins_market_price_sales_count(
+    session: AsyncSession,
+    zipcode: str,
+    window: int = 3,
+    direction: str = "all",
+    city: str | None = None,
+    property_class: str = "all",
+) -> int:
+    """Pagination ke liye total. Wahi WHERE, bas COUNT."""
+    sql = f"""
+        SELECT COUNT(*)
+        {_MARKET_SALE_FILTER}
+          AND e.event_date >= current_date - (:days * interval '1 day')
+          AND l.postal_code = :zipcode
+          AND (:city IS NULL OR l.city = :city)
+          AND (:property_class = 'all' OR l.property_class = :property_class)
+          AND (:direction = 'all'
+               OR (:direction = 'over'  AND e.price > l.list_price)
+               OR (:direction = 'under' AND e.price < l.list_price))
+    """
+
+    return await _ins_scalar(session, sql, {
+        "zipcode": zipcode,
+        "city": city,
+        "property_class": property_class,
+        "days": WINDOW_DAYS.get(window, 90),
+        "direction": direction,
+    }) or 0

@@ -49,6 +49,13 @@ from .schemas import (
 from .service import AnalyticsService
 
 
+# ---- API 9 — Market price stats ke liye (naya) ----
+from .schemas import (
+    MarketPriceStatsResponse,
+    MarketPriceSalesResponse,
+)
+
+
 router = APIRouter(tags=["Analytics"])
 
 
@@ -242,3 +249,89 @@ async def get_search_to_view_conversion(
     db: AsyncSession = Depends(get_schema_session("analytics")),
 ):
     return await AnalyticsService.get_search_to_view_conversion(session=db, days=days)
+
+
+
+# ============================================================================
+# API 9
+# Market price stats — kitne ghar asking se upar/neeche bike
+# ============================================================================
+
+@router.get(
+    "/analytics/market-price-stats",
+    response_model=MarketPriceStatsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Market Price Stats",
+    description=(
+        "Last 12 months: how many homes in this zipcode sold above, below or "
+        "at the asking price, and by how much in both percent and dollars. "
+        "Compared to the original list price. Params: zipcode, city, property_class."
+    ),
+)
+async def get_market_price_stats(
+    zipcode: str,
+    city: str | None = None,
+    property_class: str = "all",
+    db: AsyncSession = Depends(get_schema_session("analytics")),
+):
+
+    return await AnalyticsService.get_market_price_stats(
+        session=db,
+        zipcode=zipcode,
+        city=city,
+        property_class=property_class,
+    )
+
+
+# ============================================================================
+# API 9b
+# Wahi stats, par ek-ek ghar — summary pe click karne par
+# ============================================================================
+
+@router.get(
+    "/analytics/market-price-stats/sales",
+    response_model=MarketPriceSalesResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Market Price Stats — individual sales",
+    description=(
+        "The individual homes that sold above or below asking. Counts tie out "
+        "exactly with the summary. Params: zipcode, window (3/6/9/12), "
+        "direction (over/under/all), city, property_class, limit, offset."
+    ),
+)
+async def get_market_price_sales(
+    zipcode: str,
+    window: int = 3,
+    direction: str = "all",
+    city: str | None = None,
+    property_class: str = "all",
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_schema_session("analytics")),
+):
+
+    if window not in (3, 6, 9, 12):
+        raise HTTPException(
+            status_code=400,
+            detail="window must be 3, 6, 9 or 12",
+        )
+
+    if direction not in ("over", "under", "all"):
+        raise HTTPException(
+            status_code=400,
+            detail="direction must be 'over', 'under' or 'all'",
+        )
+
+    if limit > 200:
+        limit = 200
+
+    return await AnalyticsService.get_market_price_sales(
+        session=db,
+        zipcode=zipcode,
+        window=window,
+        direction=direction,
+        city=city,
+        property_class=property_class,
+        limit=limit,
+        offset=offset,
+    )

@@ -59,6 +59,29 @@ from core.categories.analytics.schemas import (
     SessionQualityResponse,
     SearchToViewConversionResponse,
 )
+
+# ---- API 9 — Market price stats ke liye (naya) ----
+from core.cache import (
+    analytics_market_stats_cache,
+    analytics_market_sales_cache,
+)
+from core.categories.analytics.schemas import (
+    MarketPriceArea,
+    MarketPriceStatsResponse,
+    MarketPriceSale,
+    MarketPriceSalesResponse,
+)
+
+
+def _f(value) -> float | None:
+    """Decimal -> float, NULL ko NULL hi rehne do.
+
+    0 aur None alag hain: 0 = '0% upar bika',
+    None = 'koi ghar upar bika hi nahi'.
+    """
+    return float(value) if value is not None else None
+
+
 logger = logging.getLogger("analytics.insights")
 
 class AnalyticsService:
@@ -346,3 +369,132 @@ class AnalyticsService:
 
 
 
+
+
+    # ======================================================================
+    # API 9 — Market price stats (sold above / below list price)
+    # ======================================================================
+
+    @staticmethod
+    @cached(analytics_market_stats_cache)
+    async def get_market_price_stats(
+        session: AsyncSession,
+        zipcode: str,
+        city: str | None = None,
+        property_class: str = "all",
+    ) -> MarketPriceStatsResponse:
+        """
+        Ek zipcode me kitne ghar asking se upar/neeche bike, aur kitna.
+
+        City alag rows me aati hai -- 94010 me Burlingame aur
+        Hillsborough dono hain aur unke median $2.9M vs kaafi upar hain.
+        """
+        rows = await repo.ins_market_price_stats(
+            session=session,
+            zipcode=zipcode,
+            city=city,
+            property_class=property_class,
+        )
+
+        areas = [
+            MarketPriceArea(
+                zipcode=str(r["postal_code"]),
+                city=r["city"],
+                property_class=property_class,
+
+                sales_12m=int(r["sales_12m"] or 0),
+                sales_3m=int(r["sales_3m"] or 0),
+                sales_6m=int(r["sales_6m"] or 0),
+                sales_9m=int(r["sales_9m"] or 0),
+
+                count_above=int(r["count_above"] or 0),
+                pct_above=_f(r["pct_above"]),
+                count_at=int(r["count_at"] or 0),
+                pct_at=_f(r["pct_at"]),
+                count_below=int(r["count_below"] or 0),
+                pct_below=_f(r["pct_below"]),
+
+                median_pct_above=_f(r["median_pct_above"]),
+                median_amount_above=_f(r["median_amount_above"]),
+                median_pct_below=_f(r["median_pct_below"]),
+                median_amount_below=_f(r["median_amount_below"]),
+
+                median_sale_price=_f(r["median_sale_price"]),
+                median_list_price=_f(r["median_list_price"]),
+            )
+            for r in rows
+        ]
+
+        return MarketPriceStatsResponse(zipcode=zipcode, areas=areas)
+
+    # ======================================================================
+    # API 9b — Market price stats, ek-ek ghar
+    # ======================================================================
+
+    @staticmethod
+    @cached(analytics_market_sales_cache)
+    async def get_market_price_sales(
+        session: AsyncSession,
+        zipcode: str,
+        window: int = 3,
+        direction: str = "all",
+        city: str | None = None,
+        property_class: str = "all",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> MarketPriceSalesResponse:
+        """
+        Summary pe click karne par: jo ghar upar ya neeche bike, unki list.
+        """
+        rows = await repo.ins_market_price_sales(
+            session=session,
+            zipcode=zipcode,
+            window=window,
+            direction=direction,
+            city=city,
+            property_class=property_class,
+            limit=limit,
+            offset=offset,
+        )
+
+        total = await repo.ins_market_price_sales_count(
+            session=session,
+            zipcode=zipcode,
+            window=window,
+            direction=direction,
+            city=city,
+            property_class=property_class,
+        )
+
+        sales = [
+            MarketPriceSale(
+                listing_key_numeric=str(r["listing_key_numeric"]),
+                address=r["unparsed_address"],
+                city=r["city"],
+                zipcode=r["postal_code"],
+                property_class=r["property_class"],
+                bedrooms=_f(r["bedrooms_total"]),
+                bathrooms=(int(r["bathrooms_total_integer"])
+                           if r["bathrooms_total_integer"] is not None else None),
+                living_area=_f(r["living_area"]),
+                sale_date=r["sale_date"],
+                list_price=float(r["list_price"]),
+                close_price=float(r["close_price"]),
+                amount_vs_list=float(r["amount_vs_list"]),
+                pct_vs_list=float(r["pct_vs_list"]),
+                latitude=_f(r["latitude"]),
+                longitude=_f(r["longitude"]),
+            )
+            for r in rows
+        ]
+
+        return MarketPriceSalesResponse(
+            zipcode=zipcode,
+            city=city,
+            window_months=window,
+            direction=direction,
+            total=int(total),
+            limit=limit,
+            offset=offset,
+            sales=sales,
+        )

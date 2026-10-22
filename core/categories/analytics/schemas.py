@@ -298,3 +298,105 @@ class SearchToViewConversionResponse(BaseModel):
     searchers: int = 0
     converters: int = 0
     conversion_rate_pct: float = 0.0
+
+
+# ============================================================================
+# API 9 — Market price stats (sold above / below list price)
+# Response for: GET /v1/analytics/market-price-stats
+# ============================================================================
+
+from datetime import date  # API 9 ke liye
+
+
+class MarketPriceArea(BaseModel):
+    """Ek zipcode + city ka market summary, pichle 12 mahine ka."""
+
+    zipcode: str
+    city: str | None = None
+    property_class: str = Field("all", description="'all' ya single_family etc.")
+
+    sales_12m: int = Field(0, description="Pichle 12 mahine me bike ghar.")
+    sales_3m: int = Field(0, description="Pichle 3 mahine me bike ghar.")
+    sales_6m: int = Field(0, description="Pichle 6 mahine me bike ghar.")
+    sales_9m: int = Field(0, description="Pichle 9 mahine me bike ghar.")
+
+    count_above: int = Field(0, description="Asking se upar bike.")
+    pct_above: float | None = Field(None, description="Upar bike, percentage me.")
+
+    count_at: int = Field(0, description="Exactly asking pe bike.")
+    pct_at: float | None = Field(None, description="Asking pe bike, percentage me.")
+
+    count_below: int = Field(0, description="Asking se neeche bike.")
+    pct_below: float | None = Field(None, description="Neeche bike, percentage me.")
+
+    median_pct_above: float | None = Field(
+        None, description="Upar bike gharon me typical kitna % upar.")
+    median_amount_above: float | None = Field(
+        None, description="Upar bike gharon me typical kitne dollar upar.")
+
+    median_pct_below: float | None = Field(
+        None, description="Neeche bike gharon me typical kitna % neeche.")
+    median_amount_below: float | None = Field(
+        None, description="Neeche bike gharon me typical kitne dollar neeche.")
+
+    median_sale_price: float | None = None
+    median_list_price: float | None = None
+
+
+class MarketPriceStatsResponse(BaseModel):
+    """
+    Response for GET /v1/analytics/market-price-stats
+
+    areas ek LIST hai, ek object nahi. 94010 me Burlingame aur
+    Hillsborough dono hain -- Burlingame ka median $2.9M, mila ke
+    $3.85M, jo kisi ka bhi sach nahi. Isliye alag-alag rows.
+    """
+
+    zipcode: str
+    compared_to: str = Field(
+        "original_list_price",
+        description=(
+            "Kis price se tulna hui. Original list price se, kyunki "
+            "price_change events sirf May 2026 se hain. UI pe "
+            "'compared to original list price' likhna zaroori hai."
+        ),
+    )
+    areas: list[MarketPriceArea] = Field(default_factory=list)
+
+
+class MarketPriceSale(BaseModel):
+    """Ek bika hua ghar."""
+
+    listing_key_numeric: str
+    address: str | None = None
+    city: str | None = None
+    zipcode: str | None = None
+    property_class: str | None = None
+
+    bedrooms: float | None = None
+    bathrooms: int | None = None
+    living_area: float | None = None
+
+    sale_date: date
+    list_price: float
+    close_price: float
+    amount_vs_list: float = Field(
+        ..., description="close_price - list_price. Positive = upar bika.")
+    pct_vs_list: float = Field(
+        ..., description="Wahi farq percentage me. Positive = upar bika.")
+
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class MarketPriceSalesResponse(BaseModel):
+    """Response for GET /v1/analytics/market-price-stats/sales"""
+
+    zipcode: str
+    city: str | None = None
+    window_months: int = 3
+    direction: str = Field("all", description="over | under | all")
+    total: int = Field(0, description="Pagination ke liye kul rows.")
+    limit: int = 50
+    offset: int = 0
+    sales: list[MarketPriceSale] = Field(default_factory=list)
